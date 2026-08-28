@@ -22,6 +22,8 @@ GitHub repository secrets에 아래 값을 등록합니다.
 - `DART_API_KEY`
 - `NAVER_API_HUB_CLIENT_ID`
 - `NAVER_API_HUB_CLIENT_SECRET`
+- `OPENAI_API_KEY` 선택값입니다. 등록하면 회사별 분석 문장을 AI로 생성합니다.
+- `OPENAI_MODEL` 선택값입니다. 비워두면 기본 모델을 사용합니다.
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USERNAME`
@@ -38,6 +40,12 @@ Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, work
 ## Email
 
 메일은 새 중요 공시가 있을 때만 발송합니다. 실제 메일 발송에 성공한 공시 접수번호만 `state/newsletter_state.json`에 저장해 중복 발송을 막습니다.
+
+## AI briefing memory
+
+매일 생성되는 분석 결과는 `state/daily_briefings/YYYY-MM-DD.json`에 저장합니다. 다음 실행 때 최근 브리핑 JSON과 `company_profiles/*.json`을 함께 읽어서 “왜 봐야 하는지”, “이전 흐름과 무엇이 달라졌는지”, “확인할 점”을 생성합니다.
+
+`OPENAI_API_KEY`를 등록하면 OpenAI Responses API로 회사별 분석 문장을 생성합니다. 키가 없거나 호출에 실패하면 자동화가 멈추지 않도록 규칙 기반 분석으로 대체합니다.
 
 ## Company profiles
 

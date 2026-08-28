@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 from datetime import date, datetime, timedelta
@@ -22,6 +23,7 @@ DISCLOSURE_CSV = DATA_DIR / "dart_disclosure_view.csv"
 SUMMARY_CSV = DATA_DIR / "dart_disclosure_summary_cache.csv"
 NEWS_CSV = DATA_DIR / "news_articles.csv"
 OUTPUT_HTML = PROJECT_ROOT / "newsletter_preview.html"
+DAILY_BRIEFING_DIR = DATA_DIR / "daily_briefings"
 
 DART_VIEWER_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 MAX_MAJOR_ISSUES = int(os.getenv("NEWSLETTER_MAX_MAJOR_ISSUES", "5") or "5")
@@ -174,6 +176,23 @@ def load_news(target_date: date) -> pd.DataFrame:
     return frame
 
 
+def load_analysis(display_date: date) -> dict[str, dict]:
+    path = DAILY_BRIEFING_DIR / f"{display_date.isoformat()}.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    companies = data.get("companies") or {}
+    return companies if isinstance(companies, dict) else {}
+
+
+def company_analysis(analysis: dict[str, dict], company: str) -> dict:
+    value = analysis.get(company) or {}
+    return value if isinstance(value, dict) else {}
+
+
 def company_color(company: str) -> str:
     return COMPANY_COLORS.get(company, "#6f7f91")
 
@@ -193,7 +212,11 @@ def make_issue_summary(row: pd.Series) -> str:
     return f"{title} 공시가 접수됐습니다. 제목을 눌러 원문을 확인해 주세요."
 
 
-def make_check_point(row: pd.Series) -> str:
+def make_check_point(row: pd.Series, analysis_item: dict | None = None) -> str:
+    analysis_item = analysis_item or {}
+    points = analysis_item.get("check_points") or []
+    if points:
+        return " / ".join(clean_text(point) for point in points[:3] if clean_text(point))
     title = clean_text(row.get("공시명", ""))
     if "정정" in title:
         return "기존 공시 대비 변경된 항목이 무엇인지 원문과 이전 공시를 함께 확인해야 합니다."
@@ -273,7 +296,18 @@ def render_news_item(row: pd.Series, company: str) -> str:
                             </li>'''
 
 
-def summarize_company_news(rows: pd.DataFrame) -> str:
+def summarize_company_news(rows: pd.DataFrame, analysis_item: dict | None = None) -> str:
+    analysis_item = analysis_item or {}
+    ai_summary = clean_text(analysis_item.get("news_summary", ""))
+    watch_reason = clean_text(analysis_item.get("watch_reason", ""))
+    previous_context = clean_text(analysis_item.get("previous_context", ""))
+    if ai_summary:
+        parts = [ai_summary]
+        if watch_reason:
+            parts.append("왜 봐야 하나: " + watch_reason)
+        if previous_context:
+            parts.append("이전 흐름: " + previous_context)
+        return " ".join(parts)
     if rows.empty:
         return ""
     words: list[str] = []
@@ -288,7 +322,7 @@ def summarize_company_news(rows: pd.DataFrame) -> str:
     return "오늘은 " + ", ".join(topics) + " 관련 보도가 눈에 띕니다."
 
 
-def render_news_section(news: pd.DataFrame) -> str:
+def render_news_section(news: pd.DataFrame, analysis: dict[str, dict]) -> str:
     if news.empty or "회사" not in news.columns:
         return '''
           <tr>
@@ -305,7 +339,7 @@ def render_news_section(news: pd.DataFrame) -> str:
     for company, rows in grouped:
         company = clean_text(company)
         items = "".join(render_news_item(row, company) for _, row in rows.iterrows())
-        topic_summary = esc(summarize_company_news(rows))
+        topic_summary = esc(summarize_company_news(rows, company_analysis(analysis, company)))
         sections.append(
             f'''
                     <div style="padding:20px 0; border-bottom:1px solid #eee9df;">
@@ -327,13 +361,16 @@ def render_news_section(news: pd.DataFrame) -> str:
           </tr>'''
 
 
-def render_issue_card(row: pd.Series) -> str:
+def render_issue_card(row: pd.Series, analysis: dict[str, dict]) -> str:
     company = clean_text(row.get("회사", ""))
     color = company_color(company)
     title = short_title(row.get("공시명", ""))
     link = clean_text(row.get("DART링크", "")) or DART_VIEWER_URL + clean_text(row.get("접수번호", ""))
     summary = make_issue_summary(row)
-    check = make_check_point(row)
+    current_analysis = company_analysis(analysis, company)
+    watch_reason = clean_text(current_analysis.get("watch_reason", ""))
+    previous_context = clean_text(current_analysis.get("previous_context", ""))
+    check = make_check_point(row, current_analysis)
 
     return f'''
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:18px; background-color:#ffffff; border-radius:16px; overflow:hidden;">
@@ -348,6 +385,13 @@ def render_issue_card(row: pd.Series) -> str:
                       <a href="{esc(link)}" style="color:#172536; text-decoration:none;">{esc(title)}</a>
                     </h2>
                     <p style="margin:0 0 18px; font-size:17px; line-height:1.82; color:#3f4d5d;">{esc(summary)}</p>
+
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#fff7eb; border-radius:12px; margin-bottom:12px;">
+                      <tr><td style="padding:15px 17px; font-size:15px; line-height:1.75; color:#4d5966;"><strong style="color:#26384a;">왜 봐야 하나</strong><br>{esc(watch_reason or '원문에서 실제 변경 내용과 후속 영향 여부를 확인해야 합니다.')}</td></tr>
+                    </table>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#faf8f3; border-radius:12px; margin-bottom:12px;">
+                      <tr><td style="padding:15px 17px; font-size:15px; line-height:1.75; color:#4d5966;"><strong style="color:#26384a;">이전 흐름</strong><br>{esc(previous_context or '누적 이력이 부족해 이번 공시를 기준점으로 저장합니다.')}</td></tr>
+                    </table>
 
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#faf8f3; border-radius:12px;">
                       <tr>
@@ -366,17 +410,24 @@ def render_issue_card(row: pd.Series) -> str:
               </table>'''
 
 
-def render_other_disclosure(row: pd.Series) -> str:
+def render_other_disclosure(row: pd.Series, analysis: dict[str, dict]) -> str:
     company = clean_text(row.get("회사", ""))
     title = short_title(row.get("공시명", ""))
     link = clean_text(row.get("DART링크", "")) or DART_VIEWER_URL + clean_text(row.get("접수번호", ""))
     summary = make_issue_summary(row)
+    current_analysis = company_analysis(analysis, company)
+    watch_reason = clean_text(current_analysis.get("watch_reason", ""))
+    check = make_check_point(row, current_analysis)
+    analysis_html = f'<div style="font-size:14px; line-height:1.7; color:#6d6255; margin-top:7px;">왜 봐야 하나: {esc(watch_reason)}</div>' if watch_reason else ""
+    check_html = f'<div style="font-size:14px; line-height:1.7; color:#6d6255; margin-top:5px;">확인할 점: {esc(check)}</div>' if check else ""
     return f'''
                       <tr>
                         <td class="other-company" style="width:110px; padding:21px 14px 21px 0; vertical-align:top; font-size:14px; line-height:1.6; color:#526269; font-weight:700;"><span style="display:inline-block; padding:6px 11px; background-color:{company_color(company)}; color:#ffffff; border-radius:999px;">{esc(company)}</span></td>
                         <td class="other-detail" style="padding:21px 0; vertical-align:top;">
                           <div style="font-size:18px; line-height:1.58; color:#26363b; font-weight:700; margin-bottom:4px;"><a href="{esc(link)}" style="color:#26363b; text-decoration:none;">{esc(title)}</a></div>
                           <div style="font-size:15px; line-height:1.75; color:#64747a;">{esc(summary)}</div>
+                          {analysis_html}
+                          {check_html}
                         </td>
                       </tr>'''
 
@@ -385,6 +436,7 @@ def render_html() -> Path:
     disclosures = load_disclosures()
     target_date = pick_disclosure_date(disclosures, report_date_from_env())
     display_date = display_date_from_env()
+    analysis = load_analysis(display_date)
     daily = disclosures[disclosures["_date"] == target_date].copy() if not disclosures.empty else pd.DataFrame()
     news = load_news(target_date)
 
@@ -395,9 +447,9 @@ def render_html() -> Path:
         major = daily.head(min(MAX_MAJOR_ISSUES, len(daily)))
     other = daily.drop(major.index, errors="ignore") if not daily.empty else pd.DataFrame()
 
-    disclosure_rows = "".join(render_other_disclosure(row) for _, row in daily.iterrows())
-    other_rows = "".join(render_other_disclosure(row) for _, row in other.iterrows())
-    news_section = render_news_section(news)
+    disclosure_rows = "".join(render_other_disclosure(row, analysis) for _, row in daily.iterrows())
+    other_rows = "".join(render_other_disclosure(row, analysis) for _, row in other.iterrows())
+    news_section = render_news_section(news, analysis)
     if not disclosure_rows:
         disclosure_rows = '<tr><td style="padding:21px 0; font-size:15px; line-height:1.75; color:#64747a;">전일 신규 공시는 없습니다.</td></tr>'
     if not other_rows:
