@@ -245,6 +245,8 @@ def update_issue_history(report: dict[str, Any]) -> None:
     issues = history.get("issues") if isinstance(history, dict) else []
     if not isinstance(issues, list):
         issues = []
+    report_date = report.get("date")
+    issues = [item for item in issues if item.get("date") != report_date]
     for company, data in (report.get("companies") or {}).items():
         topics = data.get("topics") or []
         if not topics:
