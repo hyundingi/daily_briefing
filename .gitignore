@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+state/dart_corp_codes.csv
+state/dart_disclosure_view.csv
+state/dart_disclosure_summary_cache.csv
+state/news_articles.csv
+newsletter_preview.html
