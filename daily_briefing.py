@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from src import briefing_analyzer, dart_collector, email_sender, news_collector, newsletter_renderer, page_renderer
@@ -45,6 +46,11 @@ def remember_sent_receipts(receipts: list[str]) -> None:
     save_state(state)
 
 
+def email_enabled() -> bool:
+    value = os.getenv("SEND_EMAIL", "true").strip().lower()
+    return value not in {"0", "false", "no", "n"}
+
+
 def main() -> None:
     dart_collector.main()
     news_collector.collect_news()
@@ -53,6 +59,9 @@ def main() -> None:
     page_renderer.render_pages(html_path)
 
     receipts = unsent_important_receipts()
+    if not email_enabled():
+        print("[메일발송] SEND_EMAIL=false 설정으로 발송하지 않습니다.")
+        return
     if receipts:
         subject = f"[경쟁사 브리핑] {newsletter_renderer.display_date_from_env():%Y.%m.%d} 중요 공시 {len(receipts)}건"
         sent = email_sender.send_newsletter(html_path, subject)

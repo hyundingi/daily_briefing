@@ -30,6 +30,7 @@ GitHub repository secrets에 아래 값을 등록합니다.
 - `MAIL_FROM`
 - `MAIL_TO`
 - `EMAIL_REQUIRED` 선택값입니다. `true`로 두면 SMTP 설정이 빠졌을 때 workflow를 실패시킵니다.
+- `SEND_EMAIL` 선택값입니다. `false`면 메일 발송 없이 수집/페이지 생성만 합니다. GitHub push 배포 테스트에서는 자동으로 `false`가 됩니다.
 
 ## GitHub Pages
 
