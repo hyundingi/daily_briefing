@@ -3,55 +3,285 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>경쟁사 브리핑 아카이브</title>
+  <title>경쟁사 브리핑</title>
   <style>
     * { box-sizing: border-box; }
     body { margin:0; background:#f6f4ef; color:#243244; font-family:Arial,'Malgun Gothic','Apple SD Gothic Neo',sans-serif; }
-    main { max-width:920px; margin:0 auto; padding:34px 18px 54px; }
-    header { margin-bottom:24px; }
-    h1 { margin:0 0 10px; font-size:32px; line-height:1.25; letter-spacing:-0.02em; }
+    main { max-width:1120px; margin:0 auto; padding:34px 18px 58px; }
+    header { margin-bottom:22px; }
+    h1 { margin:0 0 10px; font-size:33px; line-height:1.25; letter-spacing:-0.02em; }
     p { line-height:1.7; }
-    .latest { display:inline-block; margin-top:10px; padding:11px 15px; border-radius:999px; background:#243244; color:#fff; text-decoration:none; font-weight:700; }
-    .filters { display:flex; gap:10px; flex-wrap:wrap; margin:24px 0 18px; }
-    select { min-width:180px; padding:10px 12px; border:1px solid #ddd4c7; border-radius:12px; background:#fffdf8; color:#243244; font-size:15px; }
-    .archive-card { margin-bottom:12px; padding:18px 20px; border-radius:16px; background:#fffdf8; }
-    .archive-card a { color:#1f2d3d; text-decoration:none; font-size:19px; line-height:1.45; font-weight:700; }
+    .top-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; }
+    .latest { display:inline-block; padding:11px 15px; border-radius:999px; background:#243244; color:#fff; text-decoration:none; font-weight:700; }
+    .tabs { display:flex; gap:8px; margin:24px 0 14px; }
+    .tab-button { border:0; border-radius:999px; padding:11px 16px; background:#e8e1d4; color:#5f554b; font-weight:800; cursor:pointer; }
+    .tab-button.active { background:#243244; color:#fff; }
+    .filters { display:grid; grid-template-columns: minmax(260px, 1fr) 190px 190px; gap:10px; margin:0 0 18px; }
+    input, select { width:100%; padding:12px 13px; border:1px solid #ddd4c7; border-radius:13px; background:#fffdf8; color:#243244; font-size:15px; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .company-card, .archive-card, .empty { margin-bottom:14px; padding:20px 22px; border-radius:18px; background:#fffdf8; box-shadow:0 8px 24px rgba(45,37,25,.05); }
+    .card-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:12px; }
+    .company-chip { display:inline-block; color:#fff; border-radius:999px; padding:7px 13px; font-size:15px; font-weight:800; }
+    .counts { color:#81766a; font-size:14px; font-weight:700; white-space:nowrap; }
+    .summary { margin:0 0 8px; color:#344457; font-size:17px; font-weight:700; }
+    .watch { margin:0 0 16px; padding:12px 14px; border-radius:13px; background:#faf4e9; color:#655a50; font-size:14px; }
+    .watch b { color:#26384a; margin-right:6px; }
+    .columns { display:grid; grid-template-columns:1fr 1.15fr; gap:20px; }
+    h3 { margin:0 0 9px; font-size:15px; color:#6d6255; }
+    .item-list { margin:0; padding-left:20px; }
+    .item-list li { margin:0 0 10px; color:#9a6d38; line-height:1.55; }
+    .item-list a { color:#26384a; text-decoration:none; font-weight:700; }
+    .item-list span { display:block; margin-top:2px; color:#887e73; font-size:13px; }
+    .muted { color:#9a9287 !important; }
+    .archive-card a { color:#1f2d3d; text-decoration:none; font-size:19px; line-height:1.45; font-weight:800; }
     .archive-card p { margin:8px 0 5px; color:#665f57; }
     .archive-card small { color:#82786d; line-height:1.6; }
-    .empty { padding:18px 20px; border-radius:16px; background:#fffdf8; color:#665f57; }
+    .hidden { display:none !important; }
+    @media (max-width:760px) {
+      main { padding:26px 14px 44px; }
+      .filters { grid-template-columns:1fr; }
+      .columns { grid-template-columns:1fr; }
+      .card-head { align-items:flex-start; flex-direction:column; }
+      h1 { font-size:28px; }
+    }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <h1>경쟁사 브리핑 아카이브</h1>
-      <p>매일 생성된 공시·뉴스 브리핑을 날짜, 회사, 공시 카테고리 기준으로 다시 볼 수 있습니다.</p>
-      <a class="latest" href="archive/2026-08-28.html">최신 브리핑 보기</a>
+      <h1>경쟁사 브리핑</h1>
+      <p>회사별 최근 공시와 뉴스를 한 화면에서 보고, 지난 브리핑은 아카이브 탭에서 다시 확인할 수 있습니다.</p>
+      <div class="top-actions"><a class="latest" href="archive/2026-08-28.html">최신 브리핑 원문 보기</a></div>
     </header>
-    <section class="filters" aria-label="브리핑 필터">
-      <select id="company-filter"><option value="">전체 회사</option><option value="녹십자">녹십자</option><option value="대웅제약">대웅제약</option><option value="동아에스티">동아에스티</option><option value="보령">보령</option><option value="제일약품">제일약품</option><option value="한미약품">한미약품</option></select>
-      <select id="category-filter"><option value="">전체 카테고리</option><option value="경영/기타">경영/기타</option><option value="사업/계약">사업/계약</option></select>
+
+    <nav class="tabs" aria-label="화면 선택">
+      <button class="tab-button active" data-tab="dashboard" type="button">회사별 현황</button>
+      <button class="tab-button" data-tab="archive" type="button">브리핑 아카이브</button>
+    </nav>
+
+    <section class="filters" aria-label="검색 및 필터">
+      <input id="search-box" type="search" placeholder="회사명, 공시명, 뉴스 키워드로 검색">
+      <select id="company-filter"><option value="">전체 회사</option><option value="동아에스티">동아에스티</option><option value="한미약품">한미약품</option><option value="종근당">종근당</option><option value="유한양행">유한양행</option><option value="녹십자">녹십자</option><option value="제일약품">제일약품</option><option value="대웅제약">대웅제약</option><option value="보령">보령</option><option value="JW중외제약">JW중외제약</option><option value="일동제약">일동제약</option></select>
+      <select id="category-filter"><option value="">전체 공시 카테고리</option><option value="경영/기타">경영/기타</option><option value="사업/계약">사업/계약</option><option value="정기공시">정기공시</option><option value="지분/주주">지분/주주</option></select>
     </section>
-    <section id="archive-list">
-        <article class="archive-card" data-company="녹십자,대웅제약,동아에스티,보령,제일약품,한미약품" data-category="경영/기타,사업/계약">
+
+    <section id="dashboard" class="panel active">
+        <article class="company-card" data-company="동아에스티" data-category="정기공시" data-search="동아에스티   [기재정정]반기보고서 (2026.06) 반기보고서 (2026.06) 김준평 동아에스티 팀장 &quot;k-신약 허가·심사 변화, 개선 넘어 혁신&quot; 동아에스티, 저신장증 어린이에 성장호르몬제 지원">
+          <div class="card-head">
+            <span class="company-chip" style="background:#2f6fb3">동아에스티</span>
+            <span class="counts">공시 2건 · 뉴스 2건</span>
+          </div>
+          <p class="summary">최근 공시 2건, 뉴스 2건이 저장되어 있습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 후속 공시와 반복 뉴스 발생 여부를 확인하면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260820000424">[기재정정]반기보고서 (2026.06)</a><span>20260820 · 정기공시</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003525">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://daily.hankooki.com/news/articleView.html?idxno=1399869">김준평 동아에스티 팀장 &quot;K-신약 허가·심사 변화, 개선 넘어 혁신&quot;</a><span>2026-08-27 · hankooki</span></li><li><a href="https://www.newsway.co.kr/news/view?ud=2026082714013855651">동아에스티, 저신장증 어린이에 성장호르몬제 지원</a><span>2026-08-27 · newsway</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="한미약품" data-category="경영/기타,사업/계약,정기공시,지분/주주" data-search="한미약품 한미약품은 신규 공시 1건과 관련 뉴스 1건이 함께 확인됐습니다. 공시는 제목만으로 판단하지 말고 원문에서 금액, 일정, 상대방, 정정 여부를 확인해야 합니다; 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다. 최대주주등소유주식변동신고서 [기재정정]투자판단관련주요경영사항              (급성골수성백혈병(aml) 치료 항암신약 hm43239 기술이전 계약 체결) 투자판단관련주요경영사항 [기재정정]투자판단관련주요경영사항 [기재정정]투자판단관련주요경영사항 반기보고서 (2026.06) 주식등의대량보유상황보고서(일반) 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 임원ㆍ주요주주특정증권등소유상황보고서 최대주주등소유주식변동신고서 자기주식처분결과보고서 임원ㆍ주요주주특정증권등소유상황보고서 공정거래자율준수프로그램운영현황(안내공시) 기업설명회(ir)개최(안내공시) 기업설명회(ir)개최(안내공시) [8월 제약사이모저모⑽] 한미약품, 셀트리온, 한국애브비, 메디톡스 등...">
+          <div class="card-head">
+            <span class="company-chip" style="background:#c45636">한미약품</span>
+            <span class="counts">공시 36건 · 뉴스 1건</span>
+          </div>
+          <p class="summary">한미약품은 신규 공시 1건과 관련 뉴스 1건이 함께 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 공시는 제목만으로 판단하지 말고 원문에서 금액, 일정, 상대방, 정정 여부를 확인해야 합니다; 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260828800615">최대주주등소유주식변동신고서</a><span>20260828 · 지분/주주</span></li><li data-category="사업/계약"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826800466">[기재정정]투자판단관련주요경영사항 (급성골수성백혈병(AML) 치료 항암신약 HM43239 기술이전 계약 체결)</a><span>20260826 · 사업/계약</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260824800144">투자판단관련주요경영사항</a><span>20260824 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260821800930">[기재정정]투자판단관련주요경영사항</a><span>20260821 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260821800876">[기재정정]투자판단관련주요경영사항</a><span>20260821 · 경영/기타</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004181">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260812000873">주식등의대량보유상황보고서(일반)</a><span>20260812 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811000698">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260811 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811000697">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260811 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811000692">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260811 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811000689">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260811 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811000687">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260811 · 지분/주주</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://medicalworldnews.co.kr/news/view.php?idx=1510976884">[8월 제약사이모저모⑽] 한미약품, 셀트리온, 한국애브비, 메디톡스 등...</a><span>2026-08-28 · medicalworldnews</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="종근당" data-category="경영/기타,정기공시,지분/주주" data-search="종근당   반기보고서 (2026.06) 주식등의대량보유상황보고서(약식) 영업(잠정)실적(공정공시) ">
+          <div class="card-head">
+            <span class="company-chip" style="background:#7457a8">종근당</span>
+            <span class="counts">공시 3건 · 뉴스 0건</span>
+          </div>
+          <p class="summary">최근 공시 3건, 뉴스 0건이 저장되어 있습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 후속 공시와 반복 뉴스 발생 여부를 확인하면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003547">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260813001322">주식등의대량보유상황보고서(약식)</a><span>20260813 · 지분/주주</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260731800724">영업(잠정)실적(공정공시)</a><span>20260731 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li class="muted">최근 뉴스가 없습니다.</li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="유한양행" data-category="경영/기타,정기공시,지분/주주" data-search="유한양행 유한양행 관련 최신 뉴스 2건이 확인됐습니다. 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다. 중대재해발생(종속회사의주요경영사항) 공정거래자율준수프로그램운영현황(안내공시) 기업설명회(ir)개최(안내공시) 반기보고서 (2026.06) 주식등의대량보유상황보고서(약식) 임원ㆍ주요주주특정증권등소유상황보고서 영업(잠정)실적(공정공시) 기업설명회(ir)개최(안내공시) [줌인] 창립 100년 유한양행, 사회공헌도 넓혔다…보훈·환경·청년으로... [오늘의 제약리뷰] 대웅제약·유한양행·일동제약">
+          <div class="card-head">
+            <span class="company-chip" style="background:#16805d">유한양행</span>
+            <span class="counts">공시 8건 · 뉴스 2건</span>
+          </div>
+          <p class="summary">유한양행 관련 최신 뉴스 2건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260825800612">중대재해발생(종속회사의주요경영사항)</a><span>20260825 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260824800322">공정거래자율준수프로그램운영현황(안내공시)</a><span>20260824 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260818800232">기업설명회(IR)개최(안내공시)</a><span>20260818 · 경영/기타</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002038">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260810000622">주식등의대량보유상황보고서(약식)</a><span>20260810 · 지분/주주</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260731000646">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260731 · 지분/주주</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260730800381">영업(잠정)실적(공정공시)</a><span>20260730 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260729800556">기업설명회(IR)개최(안내공시)</a><span>20260729 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="http://www.dailypop.kr/news/articleView.html?idxno=102050">[줌인] 창립 100년 유한양행, 사회공헌도 넓혔다…보훈·환경·청년으로...</a><span>2026-08-28 · dailypop</span></li><li><a href="http://www.financialreview.co.kr/news/articleView.html?idxno=44458">[오늘의 제약리뷰] 대웅제약·유한양행·일동제약</a><span>2026-08-28 · financialreview</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="녹십자" data-category="경영/기타,정기공시,지분/주주" data-search="녹십자 녹십자 관련 최신 뉴스 2건이 확인됐습니다. 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다. 반기보고서 (2026.06) 임원ㆍ주요주주특정증권등소유상황보고서 공정거래자율준수프로그램운영현황(안내공시) 연결재무제표기준영업(잠정)실적(공정공시) gc녹십자, 프랑스 오시백스와 범용 독감 복합백신 공동 개발 착수 gc녹십자·대웅제약, 佛 오시백스와 차세대 독감백신 개발 mou·&#x27;mrna 핵심...">
+          <div class="card-head">
+            <span class="company-chip" style="background:#2f8f3a">녹십자</span>
+            <span class="counts">공시 4건 · 뉴스 2건</span>
+          </div>
+          <p class="summary">녹십자 관련 최신 뉴스 2건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003840">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260807000521">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260807 · 지분/주주</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260731800768">연결재무제표기준영업(잠정)실적(공정공시)</a><span>20260731 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260731800864">공정거래자율준수프로그램운영현황(안내공시)</a><span>20260731 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://www.onews.tv/news/articleView.html?idxno=285745">GC녹십자, 프랑스 오시백스와 범용 독감 복합백신 공동 개발 착수</a><span>2026-08-28 · onews</span></li><li><a href="http://www.wsobi.com/news/articleView.html?idxno=317184">GC녹십자·대웅제약, 佛 오시백스와 차세대 독감백신 개발 MOU·&#x27;mRNA 핵심...</a><span>2026-08-28 · wsobi</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="제일약품" data-category="정기공시" data-search="제일약품 제일약품 관련 최신 뉴스 1건이 확인됐습니다. 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다. 반기보고서 (2026.06) 급여 받은 제일약품 &#x27;베오바&#x27;···1300억 과민성방광藥 시장 재편될까">
+          <div class="card-head">
+            <span class="company-chip" style="background:#b27322">제일약품</span>
+            <span class="counts">공시 1건 · 뉴스 1건</span>
+          </div>
+          <p class="summary">제일약품 관련 최신 뉴스 1건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001908">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://www.sisajournal-e.com/news/articleView.html?idxno=423386">급여 받은 제일약품 &#x27;베오바&#x27;···1300억 과민성방광藥 시장 재편될까</a><span>2026-08-28 · sisajournal-e</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="대웅제약" data-category="경영/기타,정기공시,지분/주주" data-search="대웅제약 대웅제약 관련 최신 뉴스 8건이 확인됐습니다. 동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다. 의결권대리행사권유참고서류 주주총회소집공고 임원ㆍ주요주주특정증권등소유상황보고서 반기보고서 (2026.06) 영업(잠정)실적(공정공시) 대웅제약, &#x27;월드클래스&#x27; 성과 우수기업 선정…산업통상자원부 장관 표창 대웅제약, &#x27;월드클래스 성과 우수기업&#x27; 산업부 장관 표창 수상 대웅제약, &#x27;월드클래스&#x27; 성과 우수기업 선정…산업부 장관 표창 &#x27;1조 클럽&#x27; 달성 대웅제약 월드클래스 성과로 산자부 장관 표창 대웅제약, &#x27;월드클래스&#x27; 우수기업 선정… 산자부 장관 표창 수상 [오늘의 제약리뷰] 대웅제약·유한양행·일동제약 주주는 손실, 경영진 보수는 증가…대웅제약 &#x27;성과·보상&#x27; 엇박자 대웅제약, 매출 1조·글로벌 진출 성과로 산업부 표창">
+          <div class="card-head">
+            <span class="company-chip" style="background:#365c9f">대웅제약</span>
+            <span class="counts">공시 5건 · 뉴스 8건</span>
+          </div>
+          <p class="summary">대웅제약 관련 최신 뉴스 8건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260825000279">의결권대리행사권유참고서류</a><span>20260825 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260825000278">주주총회소집공고</a><span>20260825 · 경영/기타</span></li><li data-category="지분/주주"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260821000287">임원ㆍ주요주주특정증권등소유상황보고서</a><span>20260821 · 지분/주주</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002515">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260729800126">영업(잠정)실적(공정공시)</a><span>20260729 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://www.econovill.com/news/articleView.html?idxno=749249">대웅제약, &#x27;월드클래스&#x27; 성과 우수기업 선정…산업통상자원부 장관 표창</a><span>2026-08-28 · econovill</span></li><li><a href="https://www.asiatime.co.kr/article/20260828500301">대웅제약, &#x27;월드클래스 성과 우수기업&#x27; 산업부 장관 표창 수상</a><span>2026-08-28 · asiatime</span></li><li><a href="https://www.news1.kr/bio/pharmaceutical-bio/6272912">대웅제약, &#x27;월드클래스&#x27; 성과 우수기업 선정…산업부 장관 표창</a><span>2026-08-28 · news1</span></li><li><a href="https://www.newsclaim.co.kr/news/articleView.html?idxno=3073551">&#x27;1조 클럽&#x27; 달성 대웅제약 월드클래스 성과로 산자부 장관 표창</a><span>2026-08-28 · newsclaim</span></li><li><a href="http://www.bokuennews.com/news/article.html?no=283289">대웅제약, &#x27;월드클래스&#x27; 우수기업 선정… 산자부 장관 표창 수상</a><span>2026-08-28 · bokuennews</span></li><li><a href="http://www.financialreview.co.kr/news/articleView.html?idxno=44458">[오늘의 제약리뷰] 대웅제약·유한양행·일동제약</a><span>2026-08-28 · financialreview</span></li><li><a href="https://www.1conomynews.co.kr/news/articleView.html?idxno=50162">주주는 손실, 경영진 보수는 증가…대웅제약 &#x27;성과·보상&#x27; 엇박자</a><span>2026-08-28 · 1conomynews</span></li><li><a href="http://www.dailysmart.co.kr/news/articleView.html?idxno=128858">대웅제약, 매출 1조·글로벌 진출 성과로 산업부 표창</a><span>2026-08-28 · dailysmart</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="보령" data-category="경영/기타,정기공시" data-search="보령 보령 관련 최신 뉴스 1건이 확인됐습니다. 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다. 공정거래자율준수프로그램운영현황(안내공시) 기업설명회(ir)개최(안내공시) 반기보고서 (2026.06) 연결재무제표기준영업(잠정)실적(공정공시) [보령 is]⑤ 카나브 수출계약금 1600억…수령률 상향 과제 [보령 is]③ 김정균이 베팅한 우주사업…성패 쥔 &#x27;액시엄&#x27; 리스크">
+          <div class="card-head">
+            <span class="company-chip" style="background:#b23b62">보령</span>
+            <span class="counts">공시 4건 · 뉴스 2건</span>
+          </div>
+          <p class="summary">보령 관련 최신 뉴스 1건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826800631">공정거래자율준수프로그램운영현황(안내공시)</a><span>20260826 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260819800141">기업설명회(IR)개최(안내공시)</a><span>20260819 · 경영/기타</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004226">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260806800511">연결재무제표기준영업(잠정)실적(공정공시)</a><span>20260806 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="https://www.bloter.net/news/articleView.html?idxno=672067">[보령 is]⑤ 카나브 수출계약금 1600억…수령률 상향 과제</a><span>2026-08-28 · bloter</span></li><li><a href="https://www.bloter.net/news/articleView.html?idxno=671994">[보령 is]③ 김정균이 베팅한 우주사업…성패 쥔 &#x27;액시엄&#x27; 리스크</a><span>2026-08-27 · bloter</span></li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="JW중외제약" data-category="경영/기타,정기공시" data-search="jw중외제약   반기보고서 (2026.06) 투자판단관련주요경영사항 공정거래자율준수프로그램운영현황(안내공시) 영업(잠정)실적(공정공시) 투자판단관련주요경영사항 종류주식의보통주식으로전환(안내공시) ">
+          <div class="card-head">
+            <span class="company-chip" style="background:#54606f">JW중외제약</span>
+            <span class="counts">공시 6건 · 뉴스 0건</span>
+          </div>
+          <p class="summary">최근 공시 6건, 뉴스 0건이 저장되어 있습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 후속 공시와 반복 뉴스 발생 여부를 확인하면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814803657">투자판단관련주요경영사항</a><span>20260814 · 경영/기타</span></li><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004216">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811800882">투자판단관련주요경영사항</a><span>20260811 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811800829">영업(잠정)실적(공정공시)</a><span>20260811 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260811800845">공정거래자율준수프로그램운영현황(안내공시)</a><span>20260811 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260810800584">종류주식의보통주식으로전환(안내공시)</a><span>20260810 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li class="muted">최근 뉴스가 없습니다.</li></ul>
+            </section>
+          </div>
+        </article>
+        <article class="company-card" data-company="일동제약" data-category="경영/기타,정기공시" data-search="일동제약 일동제약 관련 최신 뉴스 2건이 확인됐습니다. 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다. 반기보고서 (2026.06) 공정거래자율준수프로그램운영현황(안내공시) 연결재무제표기준영업(잠정)실적(공정공시) [가치on] 일동제약ㆍlg전자ㆍ현대백화점 [오늘의 제약리뷰] 대웅제약·유한양행·일동제약">
+          <div class="card-head">
+            <span class="company-chip" style="background:#8b5f2a">일동제약</span>
+            <span class="counts">공시 3건 · 뉴스 2건</span>
+          </div>
+          <p class="summary">일동제약 관련 최신 뉴스 2건이 확인됐습니다.</p>
+          <p class="watch"><b>왜 봐야 하나</b> 현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다.</p>
+          <div class="columns">
+            <section>
+              <h3>최근 공시</h3>
+              <ul class="item-list disclosure-list"><li data-category="정기공시"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002932">반기보고서 (2026.06)</a><span>20260814 · 정기공시</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260730800469">연결재무제표기준영업(잠정)실적(공정공시)</a><span>20260730 · 경영/기타</span></li><li data-category="경영/기타"><a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260730800380">공정거래자율준수프로그램운영현황(안내공시)</a><span>20260730 · 경영/기타</span></li></ul>
+            </section>
+            <section>
+              <h3>최근 뉴스</h3>
+              <ul class="item-list news-list"><li><a href="http://www.smarttimes.co.kr/news/articleView.html?idxno=48555">[가치ON] 일동제약ㆍLG전자ㆍ현대백화점</a><span>2026-08-28 · smarttimes</span></li><li><a href="http://www.financialreview.co.kr/news/articleView.html?idxno=44458">[오늘의 제약리뷰] 대웅제약·유한양행·일동제약</a><span>2026-08-28 · financialreview</span></li></ul>
+            </section>
+          </div>
+        </article></section>
+    <section id="archive" class="panel">
+        <article class="archive-card" data-company="한미약품,유한양행,녹십자,제일약품,대웅제약,보령,일동제약" data-category="지분/주주" data-search="2026.08.28 경쟁사 모닝 브리핑 한미약품, 유한양행, 녹십자, 제일약품, 대웅제약, 보령, 일동제약 지분/주주">
           <a href="archive/2026-08-28.html">2026.08.28 경쟁사 모닝 브리핑</a>
-          <p>신규 공시 2건 · 최신 뉴스 15건</p>
-          <small>녹십자, 대웅제약, 동아에스티, 보령, 제일약품, 한미약품 · 경영/기타, 사업/계약</small>
+          <p>신규 공시 1건 · 최신 뉴스 17건</p>
+          <small>한미약품, 유한양행, 녹십자, 제일약품, 대웅제약, 보령, 일동제약 · 지분/주주</small>
         </article></section>
   </main>
   <script>
+    const searchBox = document.getElementById('search-box');
     const company = document.getElementById('company-filter');
     const category = document.getElementById('category-filter');
-    const cards = [...document.querySelectorAll('.archive-card')];
+    const tabs = [...document.querySelectorAll('.tab-button')];
+    const panels = [...document.querySelectorAll('.panel')];
+
+    function activePanel() { return document.querySelector('.panel.active'); }
+    function items() { return [...activePanel().querySelectorAll('.company-card, .archive-card')]; }
+    function matchCompany(card, value) { return !value || card.dataset.company.split(',').includes(value); }
+    function matchCategory(card, value) { return !value || card.dataset.category.split(',').includes(value); }
+    function matchSearch(card, value) { return !value || (card.dataset.search || '').includes(value); }
     function applyFilters() {
+      const q = searchBox.value.trim().toLowerCase();
       const c = company.value;
       const k = category.value;
-      cards.forEach(card => {
-        const okCompany = !c || card.dataset.company.split(',').includes(c);
-        const okCategory = !k || card.dataset.category.split(',').includes(k);
-        card.style.display = okCompany && okCategory ? '' : 'none';
+      items().forEach(card => {
+        card.classList.toggle('hidden', !(matchCompany(card, c) && matchCategory(card, k) && matchSearch(card, q)));
       });
     }
+    tabs.forEach(button => button.addEventListener('click', () => {
+      tabs.forEach(item => item.classList.remove('active'));
+      panels.forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      document.getElementById(button.dataset.tab).classList.add('active');
+      applyFilters();
+    }));
+    searchBox.addEventListener('input', applyFilters);
     company.addEventListener('change', applyFilters);
     category.addEventListener('change', applyFilters);
   </script>

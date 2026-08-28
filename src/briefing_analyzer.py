@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
-from dotenv import load_dotenv
 
 from . import newsletter_renderer
 from .company_profiles import get_profile_context, load_company_profiles
@@ -23,9 +20,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = PROJECT_ROOT / "state"
 DAILY_DIR = STATE_DIR / "daily_briefings"
 ISSUE_HISTORY_PATH = STATE_DIR / "issue_history.json"
-load_dotenv(PROJECT_ROOT / ".env")
-
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 
 def clean(value: object) -> str:
@@ -159,87 +153,6 @@ def fallback_company_analysis(company: str, disclosures: pd.DataFrame, news: pd.
     }
 
 
-def build_context(disclosures: pd.DataFrame, news: pd.DataFrame, profiles: dict[str, dict], recent: list[dict[str, Any]]) -> dict[str, Any]:
-    companies = sorted(set(disclosures.get("회사", pd.Series(dtype=str)).tolist()) | set(news.get("회사", pd.Series(dtype=str)).tolist()))
-    payload: dict[str, Any] = {"companies": {}}
-    for company in companies:
-        company_disclosures = disclosures[disclosures["회사"] == company] if not disclosures.empty else pd.DataFrame()
-        company_news = news[news["회사"] == company] if not news.empty else pd.DataFrame()
-        payload["companies"][company] = {
-            "profile": profiles.get(company, {}),
-            "recent_history": past_company_context(company, recent),
-            "disclosures": row_records(company_disclosures, ["접수번호", "공시일", "카테고리", "공시명", "정정여부", "actual_summary"], 8),
-            "news": row_records(company_news, ["기사일시", "매체", "제목", "링크"], 12),
-        }
-    return payload
-
-
-def extract_response_text(data: dict[str, Any]) -> str:
-    if isinstance(data.get("output_text"), str):
-        return data["output_text"]
-    chunks: list[str] = []
-    for item in data.get("output") or []:
-        for content in item.get("content") or []:
-            text = content.get("text")
-            if isinstance(text, str):
-                chunks.append(text)
-    return "\n".join(chunks).strip()
-
-
-def call_openai_analysis(context: dict[str, Any]) -> dict[str, Any] | None:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        return None
-
-    model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
-    prompt = {
-        "task": "회사별 경쟁사 브리핑 분석을 JSON으로만 작성하세요.",
-        "rules": [
-            "기사 제목과 공시명만으로 확정적 사실을 과장하지 마세요.",
-            "회사 프로필, 최근 이력, 오늘 공시/뉴스를 근거로 왜 봐야 하는지 설명하세요.",
-            "이전 흐름과 비교할 근거가 부족하면 부족하다고 쓰세요.",
-            "각 회사 결과는 today_summary, news_summary, watch_reason, previous_context, check_points, topics, confidence, evidence를 포함하세요.",
-            "confidence는 low, medium, high 중 하나만 쓰세요.",
-        ],
-        "input": context,
-    }
-    try:
-        response = requests.post(
-            OPENAI_RESPONSES_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "input": [
-                    {"role": "developer", "content": "You write cautious, evidence-based Korean competitor intelligence briefings."},
-                    {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-                ],
-            },
-            timeout=90,
-        )
-        response.raise_for_status()
-        text = extract_response_text(response.json())
-        parsed = json.loads(text)
-        if isinstance(parsed, dict) and isinstance(parsed.get("companies"), dict):
-            for item in parsed["companies"].values():
-                if isinstance(item, dict):
-                    item["generated_by"] = "openai"
-            return parsed
-    except Exception as exc:
-        print(f"[AI분석] OpenAI 분석 실패, 규칙 기반으로 대체합니다: {exc}")
-    return None
-
-
-def merge_with_fallback(ai_result: dict[str, Any] | None, fallback: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    merged = fallback.copy()
-    ai_companies = (ai_result or {}).get("companies") or {}
-    for company, value in ai_companies.items():
-        if company in merged and isinstance(value, dict):
-            base = merged[company].copy()
-            base.update({key: value for key, value in value.items() if value not in (None, "", [])})
-            merged[company] = base
-    return merged
-
-
 def update_issue_history(report: dict[str, Any]) -> None:
     history = read_json(ISSUE_HISTORY_PATH, {"issues": []})
     issues = history.get("issues") if isinstance(history, dict) else []
@@ -281,15 +194,11 @@ def analyze_today() -> Path:
         company_news = news[news["회사"] == company] if not news.empty else pd.DataFrame()
         fallback[company] = fallback_company_analysis(company, company_disclosures, company_news, profiles, recent)
 
-    context = build_context(daily, news, profiles, recent)
-    ai_result = call_openai_analysis(context)
-    company_results = merge_with_fallback(ai_result, fallback)
-
     report = {
         "date": display_date.isoformat(),
         "source_disclosure_date": target_date.isoformat(),
-        "generated_by": "openai" if ai_result else "rules",
-        "companies": company_results,
+        "generated_by": "rules",
+        "companies": fallback,
     }
     output = daily_path(display_date)
     write_json(output, report)
