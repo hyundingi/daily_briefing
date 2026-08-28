@@ -2,6 +2,9 @@ name: Daily competitor newsletter
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
   schedule:
     - cron: "37 22 * * 0-4"
 
