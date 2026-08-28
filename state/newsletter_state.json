@@ -1,5 +1,7 @@
 {
-  "last_sent_date": null,
-  "sent_receipts": [],
+  "last_sent_date": "2026-08-28",
+  "sent_receipts": [
+    "20260826800466"
+  ],
   "sent_news_links": []
 }
