@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>경쟁사 브리핑 아카이브</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f6f4ef; color:#243244; font-family:Arial,'Malgun Gothic','Apple SD Gothic Neo',sans-serif; }
+    main { max-width:920px; margin:0 auto; padding:34px 18px 54px; }
+    header { margin-bottom:24px; }
+    h1 { margin:0 0 10px; font-size:32px; line-height:1.25; letter-spacing:-0.02em; }
+    p { line-height:1.7; }
+    .latest { display:inline-block; margin-top:10px; padding:11px 15px; border-radius:999px; background:#243244; color:#fff; text-decoration:none; font-weight:700; }
+    .filters { display:flex; gap:10px; flex-wrap:wrap; margin:24px 0 18px; }
+    select { min-width:180px; padding:10px 12px; border:1px solid #ddd4c7; border-radius:12px; background:#fffdf8; color:#243244; font-size:15px; }
+    .archive-card { margin-bottom:12px; padding:18px 20px; border-radius:16px; background:#fffdf8; }
+    .archive-card a { color:#1f2d3d; text-decoration:none; font-size:19px; line-height:1.45; font-weight:700; }
+    .archive-card p { margin:8px 0 5px; color:#665f57; }
+    .archive-card small { color:#82786d; line-height:1.6; }
+    .empty { padding:18px 20px; border-radius:16px; background:#fffdf8; color:#665f57; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>경쟁사 브리핑 아카이브</h1>
+      <p>매일 생성된 공시·뉴스 브리핑을 날짜, 회사, 공시 카테고리 기준으로 다시 볼 수 있습니다.</p>
+      <a class="latest" href="archive/2026-08-28.html">최신 브리핑 보기</a>
+    </header>
+    <section class="filters" aria-label="브리핑 필터">
+      <select id="company-filter"><option value="">전체 회사</option><option value="녹십자">녹십자</option><option value="대웅제약">대웅제약</option><option value="동아에스티">동아에스티</option><option value="보령">보령</option><option value="유한양행">유한양행</option><option value="제일약품">제일약품</option><option value="종근당">종근당</option><option value="한미약품">한미약품</option></select>
+      <select id="category-filter"><option value="">전체 카테고리</option><option value="경영/기타">경영/기타</option><option value="사업/계약">사업/계약</option></select>
+    </section>
+    <section id="archive-list">
+        <article class="archive-card" data-company="녹십자,대웅제약,동아에스티,보령,유한양행,제일약품,종근당,한미약품" data-category="경영/기타,사업/계약">
+          <a href="archive/2026-08-28.html">2026.08.28 경쟁사 모닝 브리핑</a>
+          <p>신규 공시 2건 · 최신 뉴스 21건</p>
+          <small>녹십자, 대웅제약, 동아에스티, 보령, 유한양행, 제일약품, 종근당, 한미약품 · 경영/기타, 사업/계약</small>
+        </article></section>
+  </main>
+  <script>
+    const company = document.getElementById('company-filter');
+    const category = document.getElementById('category-filter');
+    const cards = [...document.querySelectorAll('.archive-card')];
+    function applyFilters() {
+      const c = company.value;
+      const k = category.value;
+      cards.forEach(card => {
+        const okCompany = !c || card.dataset.company.split(',').includes(c);
+        const okCategory = !k || card.dataset.category.split(',').includes(k);
+        card.style.display = okCompany && okCategory ? '' : 'none';
+      });
+    }
+    company.addEventListener('change', applyFilters);
+    category.addEventListener('change', applyFilters);
+  </script>
+</body>
+</html>
