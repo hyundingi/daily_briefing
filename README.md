@@ -54,3 +54,5 @@ Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, work
 ## Company profiles
 
 `company_profiles/*.json`에 회사별 사업 설명, 관찰 포인트, 과거 이력을 누적하면 이후 요약/판단 로직에 반영할 수 있습니다.
+
+프로필 스키마와 데이터 정돈 기준은 `docs/data_schema.md`를 참고합니다.

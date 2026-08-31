@@ -1,0 +1,12 @@
+{
+  "name": "회사명",
+  "aliases": ["뉴스/공시에서 같이 잡을 별칭"],
+  "business_summary": "Gemini가 회사 맥락을 이해할 수 있는 1문장 요약",
+  "core_areas": ["주요 사업/제품군/관심 영역"],
+  "watch_points": ["이 회사에서 반복적으로 봐야 할 관찰 포인트"],
+  "high_priority_signals": ["중요하게 봐야 할 뉴스/공시 신호"],
+  "low_priority_signals": ["대체로 낮은 우선순위로 분류할 신호"],
+  "disclosure_focus": ["공시 원문에서 확인할 항목"],
+  "news_focus": ["뉴스 판단 시 확인할 항목"],
+  "history": []
+}
