@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import requests
+from dotenv import load_dotenv
 
 from . import newsletter_renderer
 from .company_profiles import get_profile_context, load_company_profiles
@@ -20,6 +23,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = PROJECT_ROOT / "state"
 DAILY_DIR = STATE_DIR / "daily_briefings"
 ISSUE_HISTORY_PATH = STATE_DIR / "issue_history.json"
+load_dotenv(PROJECT_ROOT / ".env")
+
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
 def clean(value: object) -> str:
@@ -66,6 +73,14 @@ def row_records(frame: pd.DataFrame, columns: list[str], max_rows: int = 20) -> 
     for _, row in frame.head(max_rows).iterrows():
         rows.append({column: clean(row.get(column, "")) for column in usable})
     return rows
+
+
+def company_order_key(company: str) -> tuple[int, str]:
+    names = list(TARGET_COMPANIES.keys()) if isinstance(TARGET_COMPANIES, dict) else list(TARGET_COMPANIES)
+    try:
+        return (names.index(company), company)
+    except ValueError:
+        return (999, company)
 
 
 def topic_words(rows: pd.DataFrame) -> list[str]:
@@ -130,8 +145,18 @@ def fallback_company_analysis(company: str, disclosures: pd.DataFrame, news: pd.
         watch_bits.append("회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다")
     watch_reason = "; ".join(watch_bits) + "." if watch_bits else "현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다."
 
+    priority = "low"
+    if disclosure_count:
+        priority = "medium"
+    if not disclosures.empty and "_score" in disclosures.columns and disclosures["_score"].max() >= 30:
+        priority = "high"
+    if news_count >= 5 and priority == "low":
+        priority = "medium"
+
     return {
         "company": company,
+        "issue_type": "공시/뉴스" if disclosure_count and news_count else "공시" if disclosure_count else "뉴스",
+        "priority": priority,
         "today_summary": today_summary,
         "news_summary": news_summary,
         "watch_reason": watch_reason,
@@ -151,6 +176,136 @@ def fallback_company_analysis(company: str, disclosures: pd.DataFrame, news: pd.
         },
         "generated_by": "rules",
     }
+
+
+def build_gemini_context(disclosures: pd.DataFrame, news: pd.DataFrame, profiles: dict[str, dict], recent: list[dict[str, Any]]) -> dict[str, Any]:
+    companies = sorted(
+        set(disclosures.get("회사", pd.Series(dtype=str)).tolist()) | set(news.get("회사", pd.Series(dtype=str)).tolist()),
+        key=company_order_key,
+    )
+    context: dict[str, Any] = {"companies": []}
+    for company in companies:
+        company_disclosures = disclosures[disclosures["회사"] == company] if not disclosures.empty else pd.DataFrame()
+        company_news = news[news["회사"] == company] if not news.empty else pd.DataFrame()
+        context["companies"].append(
+            {
+                "company": company,
+                "profile": profiles.get(company, {}),
+                "recent_history": past_company_context(company, recent),
+                "disclosures": row_records(company_disclosures, ["접수번호", "공시일", "카테고리", "공시명", "정정여부", "actual_summary"], 10),
+                "news": row_records(company_news, ["기사일시", "매체", "제목", "링크"], 15),
+            }
+        )
+    return context
+
+
+def extract_gemini_text(data: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for candidate in data.get("candidates") or []:
+        content = candidate.get("content") or {}
+        for part in content.get("parts") or []:
+            text = part.get("text")
+            if isinstance(text, str):
+                chunks.append(text)
+    return "\n".join(chunks).strip()
+
+
+def normalize_gemini_result(data: Any) -> dict[str, dict[str, Any]]:
+    if isinstance(data, dict) and isinstance(data.get("companies"), list):
+        rows = data["companies"]
+    elif isinstance(data, list):
+        rows = data
+    else:
+        return {}
+
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        company = clean(row.get("company"))
+        if not company:
+            continue
+        check_points = row.get("check_points") or []
+        evidence = row.get("evidence") or []
+        result[company] = {
+            "company": company,
+            "issue_type": clean(row.get("issue_type")) or "뉴스/공시",
+            "priority": clean(row.get("priority")) or "medium",
+            "today_summary": clean(row.get("today_summary")),
+            "news_summary": clean(row.get("summary")) or clean(row.get("news_summary")),
+            "watch_reason": clean(row.get("why_it_matters")) or clean(row.get("watch_reason")),
+            "previous_context": clean(row.get("change_from_previous")) or clean(row.get("previous_context")),
+            "check_points": [clean(item) for item in check_points if clean(item)][:4],
+            "topics": [clean(item) for item in (row.get("topics") or []) if clean(item)][:6],
+            "confidence": clean(row.get("confidence")) or "medium",
+            "evidence": evidence,
+            "generated_by": "gemini",
+        }
+    return result
+
+
+def call_gemini_analysis(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return {}
+    model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+    prompt = {
+        "role": "경쟁사 공시/뉴스 브리핑 분석가",
+        "goal": "제목 빈도가 아니라 사업 영향, 리스크, 회사 맥락, 과거 흐름 기준으로 오늘 볼 만한 이슈인지 판단합니다.",
+        "decision_rules": [
+            "뉴스 건수가 많아도 수상, 캠페인, 인터뷰, 단순 홍보, 사회공헌, 채용, 행사 보도면 priority를 low 또는 reference로 둡니다.",
+            "계약, 기술이전, 임상 단계 변화, 품목허가, 실적, 투자, M&A, 소송, 품질/안전, 경영권, 대규모 공급은 더 주의 깊게 봅니다.",
+            "회사 프로필의 watch_points와 직접 연결되면 왜 중요한지 설명합니다.",
+            "최근 이력과 같은 주제가 반복되면 변화인지 반복 홍보인지 구분합니다.",
+            "제공된 데이터에 없는 금액, 임상 결과, 계약 상대방, 사실관계는 추정하지 않습니다.",
+            "중요하지 않으면 중요하지 않다고 분명히 씁니다.",
+        ],
+        "output_format": {
+            "companies": [
+                {
+                    "company": "회사명",
+                    "issue_type": "계약/R&D/허가/실적/투자/리스크/홍보/대외평가/참고 중 하나",
+                    "priority": "high | medium | low | reference",
+                    "today_summary": "오늘 요약 1문장",
+                    "summary": "주요 이슈 요약 1~2문장",
+                    "why_it_matters": "왜 봐야 하는지 1~2문장",
+                    "change_from_previous": "이전 흐름과 비교. 근거 부족하면 부족하다고 작성",
+                    "check_points": ["확인할 점 1", "확인할 점 2"],
+                    "topics": ["의미 단위 토픽"],
+                    "confidence": "low | medium | high",
+                    "evidence": ["근거 1", "근거 2"],
+                }
+            ]
+        },
+        "input": context,
+    }
+    try:
+        response = requests.post(
+            GEMINI_API_URL.format(model=model),
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json={
+                "contents": [{"role": "user", "parts": [{"text": json.dumps(prompt, ensure_ascii=False)}]}],
+                "generationConfig": {"responseMimeType": "application/json"},
+            },
+            timeout=75,
+        )
+        response.raise_for_status()
+        text = extract_gemini_text(response.json())
+        return normalize_gemini_result(json.loads(text))
+    except Exception as exc:
+        print(f"[Gemini분석] 호출 실패, 규칙 기반으로 대체합니다: {exc}")
+        return {}
+
+
+def merge_analysis(gemini: dict[str, dict[str, Any]], fallback: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    merged = fallback.copy()
+    for company, item in gemini.items():
+        if company not in merged:
+            continue
+        base = merged[company].copy()
+        base.update({key: value for key, value in item.items() if value not in (None, "", [])})
+        merged[company] = base
+    return merged
 
 
 def update_issue_history(report: dict[str, Any]) -> None:
@@ -187,18 +342,21 @@ def analyze_today() -> Path:
     news = newsletter_renderer.load_news(target_date)
     recent = load_recent_daily_briefings()
 
-    companies = sorted(set(daily.get("회사", pd.Series(dtype=str)).tolist()) | set(news.get("회사", pd.Series(dtype=str)).tolist()))
+    companies = sorted(set(daily.get("회사", pd.Series(dtype=str)).tolist()) | set(news.get("회사", pd.Series(dtype=str)).tolist()), key=company_order_key)
     fallback = {}
     for company in companies:
         company_disclosures = daily[daily["회사"] == company] if not daily.empty else pd.DataFrame()
         company_news = news[news["회사"] == company] if not news.empty else pd.DataFrame()
         fallback[company] = fallback_company_analysis(company, company_disclosures, company_news, profiles, recent)
 
+    gemini = call_gemini_analysis(build_gemini_context(daily, news, profiles, recent))
+    results = merge_analysis(gemini, fallback)
+
     report = {
         "date": display_date.isoformat(),
         "source_disclosure_date": target_date.isoformat(),
-        "generated_by": "rules",
-        "companies": fallback,
+        "generated_by": "gemini" if gemini else "rules",
+        "companies": results,
     }
     output = daily_path(display_date)
     write_json(output, report)

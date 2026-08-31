@@ -4,10 +4,11 @@
     "title": "2026.08.31 경쟁사 모닝 브리핑",
     "path": "archive/2026-08-31.html",
     "disclosure_count": 4,
-    "news_count": 21,
+    "news_count": 22,
     "companies": [
       "한미약품",
       "종근당",
+      "유한양행",
       "녹십자",
       "제일약품",
       "대웅제약",
@@ -15,25 +16,6 @@
     ],
     "categories": [
       "경영/기타",
-      "지분/주주"
-    ]
-  },
-  {
-    "date": "2026-08-28",
-    "title": "2026.08.28 경쟁사 모닝 브리핑",
-    "path": "archive/2026-08-28.html",
-    "disclosure_count": 1,
-    "news_count": 18,
-    "companies": [
-      "한미약품",
-      "유한양행",
-      "녹십자",
-      "제일약품",
-      "대웅제약",
-      "보령",
-      "일동제약"
-    ],
-    "categories": [
       "지분/주주"
     ]
   }

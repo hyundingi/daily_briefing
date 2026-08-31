@@ -156,6 +156,24 @@ def render_news_items(rows: pd.DataFrame) -> str:
     return "".join(items)
 
 
+def render_detail_block(item: dict) -> str:
+    check_points = [clean(value) for value in item.get("check_points", []) if clean(value)] if isinstance(item.get("check_points", []), list) else []
+    rows = [
+        ("판단", " · ".join(value for value in [clean(item.get("issue_type", "")), clean(item.get("priority", ""))] if value)),
+        ("오늘 요약", clean(item.get("today_summary", ""))),
+        ("주요 내용", clean(item.get("news_summary", ""))),
+        ("왜 봐야 하나", clean(item.get("watch_reason", ""))),
+        ("이전 흐름", clean(item.get("previous_context", ""))),
+        ("확인할 점", " / ".join(check_points[:3])),
+    ]
+    parts = []
+    for label, value in rows:
+        if not value:
+            continue
+        parts.append(f'<div class="brief-row"><span>{esc(label)}</span><p>{esc(value)}</p></div>')
+    return "".join(parts)
+
+
 def render_company_cards(disclosures: pd.DataFrame, news: pd.DataFrame, analysis: dict[str, dict]) -> str:
     companies = sorted(set(COMPANY_ORDER) | set(disclosures.get("회사", pd.Series(dtype=str)).tolist()) | set(news.get("회사", pd.Series(dtype=str)).tolist()), key=company_sort_key)
     cards = []
@@ -176,7 +194,13 @@ def render_company_cards(disclosures: pd.DataFrame, news: pd.DataFrame, analysis
         ).lower()
         color = newsletter_renderer.company_color(company)
         summary = clean(item.get("today_summary", "")) or f"최근 공시 {len(drows)}건, 뉴스 {len(nrows)}건이 저장되어 있습니다."
-        watch = clean(item.get("watch_reason", "")) or "후속 공시와 반복 뉴스 발생 여부를 확인하면 됩니다."
+        if not item:
+            item = {
+                "today_summary": summary,
+                "watch_reason": "후속 공시와 반복 뉴스 발생 여부를 확인하면 됩니다.",
+                "check_points": ["후속 DART 공시 여부", "동일 주제 뉴스 반복 여부"],
+            }
+        detail_block = render_detail_block(item)
         cards.append(
             f'''
         <article class="company-card" data-company="{esc(company)}" data-category="{esc(categories)}" data-search="{esc(search_text)}">
@@ -184,8 +208,7 @@ def render_company_cards(disclosures: pd.DataFrame, news: pd.DataFrame, analysis
             <span class="company-chip" style="background:{color}">{esc(company)}</span>
             <span class="counts">공시 {len(drows)}건 · 뉴스 {len(nrows)}건</span>
           </div>
-          <p class="summary">{esc(summary)}</p>
-          <p class="watch"><b>왜 봐야 하나</b> {esc(watch)}</p>
+          <div class="brief-box">{detail_block}</div>
           <div class="columns">
             <section>
               <h3>최근 공시</h3>
@@ -254,9 +277,10 @@ def render_index(items: list[dict[str, object]], report_date: date) -> None:
     .card-head {{ display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:12px; }}
     .company-chip {{ display:inline-block; color:#fff; border-radius:999px; padding:7px 13px; font-size:15px; font-weight:800; }}
     .counts {{ color:#81766a; font-size:14px; font-weight:700; white-space:nowrap; }}
-    .summary {{ margin:0 0 8px; color:#344457; font-size:17px; font-weight:700; }}
-    .watch {{ margin:0 0 16px; padding:12px 14px; border-radius:13px; background:#faf4e9; color:#655a50; font-size:14px; }}
-    .watch b {{ color:#26384a; margin-right:6px; }}
+    .brief-box {{ margin:0 0 16px; padding:13px 15px; border-radius:14px; background:#faf4e9; }}
+    .brief-row {{ display:grid; grid-template-columns:86px 1fr; gap:12px; padding:5px 0; }}
+    .brief-row span {{ color:#756c61; font-size:13px; font-weight:800; white-space:nowrap; }}
+    .brief-row p {{ margin:0; color:#4b5966; font-size:14px; line-height:1.65; }}
     .columns {{ display:grid; grid-template-columns:1fr 1.15fr; gap:20px; }}
     h3 {{ margin:0 0 9px; font-size:15px; color:#6d6255; }}
     .item-list {{ margin:0; padding-left:20px; }}
@@ -272,6 +296,7 @@ def render_index(items: list[dict[str, object]], report_date: date) -> None:
       main {{ padding:26px 14px 44px; }}
       .filters {{ grid-template-columns:1fr; }}
       .columns {{ grid-template-columns:1fr; }}
+      .brief-row {{ grid-template-columns:1fr; gap:2px; }}
       .card-head {{ align-items:flex-start; flex-direction:column; }}
       h1 {{ font-size:28px; }}
     }}

@@ -322,6 +322,39 @@ def summarize_company_news(rows: pd.DataFrame, analysis_item: dict | None = None
     return "오늘은 " + ", ".join(topics) + " 관련 보도가 눈에 띕니다."
 
 
+def render_analysis_lines(analysis_item: dict | None = None, fallback_summary: str = "") -> str:
+    analysis_item = analysis_item or {}
+    rows = [
+        ("오늘 요약", clean_text(analysis_item.get("today_summary", "")) or fallback_summary),
+        ("주요 내용", clean_text(analysis_item.get("news_summary", ""))),
+        ("왜 봐야 하나", clean_text(analysis_item.get("watch_reason", ""))),
+        ("이전 흐름", clean_text(analysis_item.get("previous_context", ""))),
+    ]
+    check_points = [clean_text(item) for item in analysis_item.get("check_points", []) if clean_text(item)]
+    if check_points:
+        rows.append(("확인할 점", " / ".join(check_points[:3])))
+    priority = clean_text(analysis_item.get("priority", ""))
+    issue_type = clean_text(analysis_item.get("issue_type", ""))
+    if priority or issue_type:
+        rows.insert(0, ("판단", " · ".join(part for part in [issue_type, priority] if part)))
+
+    lines = []
+    for label, value in rows:
+        if not value:
+            continue
+        lines.append(
+            f'''<tr>
+                            <td style="width:82px; padding:4px 12px 4px 0; vertical-align:top; color:#756c61; font-weight:700; white-space:nowrap;">{esc(label)}</td>
+                            <td style="padding:4px 0; vertical-align:top; color:#4d5966;">{esc(value)}</td>
+                          </tr>'''
+        )
+    if not lines:
+        return ""
+    return f'''<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#faf8f3; border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:14px; line-height:1.7;">
+                        {''.join(lines)}
+                      </table>'''
+
+
 def render_news_section(news: pd.DataFrame, analysis: dict[str, dict]) -> str:
     if news.empty or "회사" not in news.columns:
         return '''
@@ -339,12 +372,13 @@ def render_news_section(news: pd.DataFrame, analysis: dict[str, dict]) -> str:
     for company, rows in grouped:
         company = clean_text(company)
         items = "".join(render_news_item(row, company) for _, row in rows.iterrows())
-        topic_summary = esc(summarize_company_news(rows, company_analysis(analysis, company)))
+        analysis_item = company_analysis(analysis, company)
+        analysis_html = render_analysis_lines(analysis_item, summarize_company_news(rows, analysis_item))
         sections.append(
             f'''
                     <div style="padding:20px 0; border-bottom:1px solid #eee9df;">
                       <div style="margin-bottom:10px; font-size:0;"><span class="company-tag" style="display:inline-block; padding:6px 11px; background-color:{company_color(company)}; color:#ffffff; border-radius:999px; font-size:14px; line-height:1.35; font-weight:700;">{esc(company)}</span></div>
-                      <div style="background-color:#faf8f3; border-radius:12px; padding:12px 14px; margin-bottom:12px; font-size:14px; line-height:1.7; color:#665f57;">{topic_summary}</div>
+                      {analysis_html}
                       <ul class="news-tail" style="margin:0; padding:0 0 0 22px; color:{company_color(company)};">
                         {items}
                       </ul>
@@ -417,9 +451,19 @@ def render_other_disclosure(row: pd.Series, analysis: dict[str, dict]) -> str:
     summary = make_issue_summary(row)
     current_analysis = company_analysis(analysis, company)
     watch_reason = clean_text(current_analysis.get("watch_reason", ""))
+    previous_context = clean_text(current_analysis.get("previous_context", ""))
     check = make_check_point(row, current_analysis)
-    analysis_html = f'<div style="font-size:14px; line-height:1.7; color:#6d6255; margin-top:7px;">왜 봐야 하나: {esc(watch_reason)}</div>' if watch_reason else ""
-    check_html = f'<div style="font-size:14px; line-height:1.7; color:#6d6255; margin-top:5px;">확인할 점: {esc(check)}</div>' if check else ""
+    analysis_html = render_analysis_lines(
+        {
+            "today_summary": "",
+            "news_summary": "",
+            "watch_reason": watch_reason,
+            "previous_context": previous_context,
+            "check_points": [check] if check else [],
+            "priority": current_analysis.get("priority", ""),
+            "issue_type": current_analysis.get("issue_type", ""),
+        }
+    )
     return f'''
                       <tr>
                         <td class="other-company" style="width:110px; padding:21px 14px 21px 0; vertical-align:top; font-size:14px; line-height:1.6; color:#526269; font-weight:700;"><span style="display:inline-block; padding:6px 11px; background-color:{company_color(company)}; color:#ffffff; border-radius:999px;">{esc(company)}</span></td>
@@ -427,7 +471,6 @@ def render_other_disclosure(row: pd.Series, analysis: dict[str, dict]) -> str:
                           <div style="font-size:18px; line-height:1.58; color:#26363b; font-weight:700; margin-bottom:4px;"><a href="{esc(link)}" style="color:#26363b; text-decoration:none;">{esc(title)}</a></div>
                           <div style="font-size:15px; line-height:1.75; color:#64747a;">{esc(summary)}</div>
                           {analysis_html}
-                          {check_html}
                         </td>
                       </tr>'''
 
