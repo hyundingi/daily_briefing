@@ -68,6 +68,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/newsletter_state.json state/archive_index.json state/issue_history.json state/daily_briefings public
+          git add state/newsletter_state.json state/archive_index.json state/issue_history.json state/daily_briefings state/company_timelines public
           git diff --staged --quiet || git commit -m "Update newsletter archive"
           git push || true

@@ -6,6 +6,7 @@
 
 - `company_profiles/*.json`: 회사별 기본 맥락, 관찰 포인트, 중요/낮은 우선순위 신호
 - `state/daily_briefings/YYYY-MM-DD.json`: 매일 생성된 회사별 분석 결과
+- `state/company_timelines/회사명.json`: 회사별 최근 흐름을 빠르게 읽기 위한 압축 타임라인
 - `state/issue_history.json`: 회사별 주요 토픽과 판단 근거 누적 이력
 - 당일 수집 공시/뉴스 CSV: Gemini 입력으로 전달되는 원자료
 
@@ -26,3 +27,22 @@
 - 중요하지 않은 뉴스는 중요하지 않다고 쓰게 합니다.
 - 공시/뉴스 원문에 없는 금액, 계약 상대방, 임상 결과는 추정하지 않습니다.
 - push 배포 테스트에서는 Gemini를 호출하지 않고, 스케줄/수동 실행에서만 호출합니다.
+
+## 회사별 타임라인
+
+`state/company_timelines/회사명.json`은 매일 분석 결과 중 Gemini가 다음 분석 때 다시 참고할 만큼만 압축해 저장합니다.
+
+저장되는 항목은 다음과 같습니다.
+
+- `date`: 브리핑 날짜
+- `issue_type`: 계약/R&D/허가/홍보/참고 등 이슈 유형
+- `priority`: high, medium, low, reference
+- `summary`: 그날 회사별 요약
+- `watch_reason`: 왜 봐야 하는지
+- `previous_context`: 이전 흐름과의 비교
+- `check_points`: 확인할 점
+- `topics`: 의미 단위 토픽
+- `confidence`: 판단 확신도
+- `evidence`: 근거 요약
+
+Gemini 입력에는 회사별 타임라인 전체가 아니라 최근 5개 이벤트만 전달합니다. 파일은 길게 보관하되, LLM이 읽는 양은 작게 유지하기 위한 구조입니다.

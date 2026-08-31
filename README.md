@@ -49,7 +49,7 @@ Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, work
 
 매일 생성되는 분석 결과는 `state/daily_briefings/YYYY-MM-DD.json`에 저장합니다. 다음 실행 때 최근 브리핑 JSON과 `company_profiles/*.json`을 함께 읽어서 “왜 봐야 하는지”, “이전 흐름과 무엇이 달라졌는지”, “확인할 점”을 생성합니다.
 
-`GEMINI_API_KEY`가 있고 `USE_GEMINI=true`이면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다. 키가 없거나 호출에 실패하면 자동화가 멈추지 않도록 규칙 기반 분석으로 대체합니다. 코드 push로 배포 테스트를 할 때는 Gemini 요청이 쌓이지 않도록 자동으로 `USE_GEMINI=false`가 됩니다. 분석 결과는 매일 `state/daily_briefings/YYYY-MM-DD.json`에 저장되고 다음 실행 때 최근 흐름 비교에 사용됩니다.
+`GEMINI_API_KEY`가 있고 `USE_GEMINI=true`이면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다. 키가 없거나 호출에 실패하면 자동화가 멈추지 않도록 규칙 기반 분석으로 대체합니다. 코드 push로 배포 테스트를 할 때는 Gemini 요청이 쌓이지 않도록 자동으로 `USE_GEMINI=false`가 됩니다. 분석 결과는 매일 `state/daily_briefings/YYYY-MM-DD.json`에 저장되고, 회사별 압축 이력은 `state/company_timelines/회사명.json`에 누적됩니다. 다음 실행 때 Gemini에는 회사별 최근 5개 이벤트만 전달해 입력 크기를 줄입니다.
 
 ## Company profiles
 

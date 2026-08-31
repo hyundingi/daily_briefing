@@ -22,6 +22,7 @@ from .issue_clusterer import normalize_text
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = PROJECT_ROOT / "state"
 DAILY_DIR = STATE_DIR / "daily_briefings"
+COMPANY_TIMELINE_DIR = STATE_DIR / "company_timelines"
 ISSUE_HISTORY_PATH = STATE_DIR / "issue_history.json"
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -59,6 +60,11 @@ def daily_path(report_date: date | None = None) -> Path:
     return DAILY_DIR / f"{target.isoformat()}.json"
 
 
+def company_timeline_path(company: str) -> Path:
+    safe_name = clean(company).replace("/", "_").replace("\\", "_")
+    return COMPANY_TIMELINE_DIR / f"{safe_name}.json"
+
+
 def load_recent_daily_briefings(limit: int = 14) -> list[dict[str, Any]]:
     if not DAILY_DIR.exists():
         return []
@@ -70,6 +76,14 @@ def load_recent_daily_briefings(limit: int = 14) -> list[dict[str, Any]]:
         if len(items) >= limit:
             break
     return items
+
+
+def load_recent_company_timeline(company: str, limit: int = 5) -> list[dict[str, Any]]:
+    data = read_json(company_timeline_path(company), {"company": company, "events": []})
+    events = data.get("events") if isinstance(data, dict) else []
+    if not isinstance(events, list):
+        return []
+    return events[-limit:][::-1]
 
 
 def row_records(frame: pd.DataFrame, columns: list[str], max_rows: int = 20) -> list[dict[str, str]]:
@@ -101,6 +115,20 @@ def topic_words(rows: pd.DataFrame) -> list[str]:
 
 
 def past_company_context(company: str, recent: list[dict[str, Any]]) -> list[dict[str, str]]:
+    timeline = load_recent_company_timeline(company)
+    if timeline:
+        return [
+            {
+                "date": clean(item.get("date")),
+                "summary": clean(item.get("summary")),
+                "watch_reason": clean(item.get("watch_reason")),
+                "topics": ", ".join(map(str, item.get("topics") or [])),
+                "priority": clean(item.get("priority")),
+                "issue_type": clean(item.get("issue_type")),
+            }
+            for item in timeline
+        ]
+
     contexts: list[dict[str, str]] = []
     for item in recent:
         company_data = (item.get("companies") or {}).get(company) or {}
@@ -198,7 +226,7 @@ def build_gemini_context(disclosures: pd.DataFrame, news: pd.DataFrame, profiles
             {
                 "company": company,
                 "profile": profiles.get(company, {}),
-                "recent_history": past_company_context(company, recent),
+                "recent_history": past_company_context(company, recent)[:5],
                 "disclosures": row_records(company_disclosures, ["접수번호", "공시일", "카테고리", "공시명", "정정여부", "actual_summary"], 10),
                 "news": row_records(company_news, ["기사일시", "매체", "제목", "링크"], 15),
             }
@@ -358,6 +386,57 @@ def update_issue_history(report: dict[str, Any]) -> None:
     write_json(ISSUE_HISTORY_PATH, {"issues": issues})
 
 
+def timeline_event(report_date: str, company: str, data: dict[str, Any], generated_by: str) -> dict[str, Any]:
+    evidence = data.get("evidence") or {}
+    if isinstance(evidence, dict):
+        evidence_summary = {
+            "disclosure_count": evidence.get("disclosure_count", 0),
+            "news_count": evidence.get("news_count", 0),
+            "profile_used": evidence.get("profile_used", False),
+            "past_context_count": evidence.get("past_context_count", 0),
+        }
+    elif isinstance(evidence, list):
+        evidence_summary = evidence[:5]
+    else:
+        evidence_summary = []
+
+    return {
+        "date": report_date,
+        "company": company,
+        "issue_type": data.get("issue_type", ""),
+        "priority": data.get("priority", ""),
+        "summary": data.get("today_summary", ""),
+        "news_summary": data.get("news_summary", ""),
+        "watch_reason": data.get("watch_reason", ""),
+        "previous_context": data.get("previous_context", ""),
+        "check_points": data.get("check_points", [])[:4] if isinstance(data.get("check_points", []), list) else [],
+        "topics": data.get("topics", [])[:6] if isinstance(data.get("topics", []), list) else [],
+        "confidence": data.get("confidence", ""),
+        "evidence": evidence_summary,
+        "generated_by": data.get("generated_by", generated_by),
+    }
+
+
+def update_company_timelines(report: dict[str, Any], max_events_per_company: int = 120) -> None:
+    report_date = clean(report.get("date"))
+    companies = report.get("companies") or {}
+    if not report_date or not isinstance(companies, dict):
+        return
+
+    for company, data in companies.items():
+        if not isinstance(data, dict):
+            continue
+        path = company_timeline_path(company)
+        timeline = read_json(path, {"company": company, "events": []})
+        events = timeline.get("events") if isinstance(timeline, dict) else []
+        if not isinstance(events, list):
+            events = []
+        events = [item for item in events if item.get("date") != report_date]
+        events.append(timeline_event(report_date, company, data, clean(report.get("generated_by"))))
+        events.sort(key=lambda item: str(item.get("date", "")))
+        write_json(path, {"company": company, "updated_at": report_date, "events": events[-max_events_per_company:]})
+
+
 def analyze_today() -> Path:
     profiles = load_company_profiles()
     disclosures = newsletter_renderer.load_disclosures()
@@ -387,6 +466,7 @@ def analyze_today() -> Path:
     output = daily_path(display_date)
     write_json(output, report)
     update_issue_history(report)
+    update_company_timelines(report)
     print(f"[AI분석] 저장 완료: {output}")
     return output
 
