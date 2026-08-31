@@ -18,7 +18,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Validate Python files
+        run: python -m py_compile daily_briefing.py src/*.py
+
   build-newsletter:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +44,7 @@ jobs:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
           NAVER_API_HUB_CLIENT_ID: ${{ secrets.NAVER_API_HUB_CLIENT_ID }}
           NAVER_API_HUB_CLIENT_SECRET: ${{ secrets.NAVER_API_HUB_CLIENT_SECRET }}
-          USE_GEMINI: ${{ github.event_name != 'push' }}
+          USE_GEMINI: "true"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
@@ -42,7 +55,7 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           EMAIL_REQUIRED: "false"
-          SEND_EMAIL: ${{ github.event_name != 'push' }}
+          SEND_EMAIL: "true"
         run: python daily_briefing.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

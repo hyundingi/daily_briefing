@@ -1,240 +1,199 @@
 {
   "date": "2026-08-31",
   "source_disclosure_date": "2026-08-28",
-  "generated_by": "rules",
+  "generated_by": "gemini",
   "analysis_meta": {
-    "attempted": false,
+    "attempted": true,
     "key_present": true,
-    "model": "",
-    "status": "disabled",
+    "model": "gemini-3.6-flash",
+    "status": "success",
     "error": ""
   },
   "companies": {
     "한미약품": {
       "company": "한미약품",
-      "issue_type": "공시",
+      "issue_type": "계약",
       "priority": "medium",
-      "today_summary": "한미약품은 신규 공시 1건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스에서 뚜렷하게 반복되는 키워드는 제한적입니다.",
-      "watch_reason": "공시는 제목만으로 판단하지 말고 원문에서 금액, 일정, 상대방, 정정 여부를 확인해야 합니다; 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다.",
-      "previous_context": "최근 브리핑에서도 기술이전, 빅파마, R&D재도전가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "빅파마와의 R&D 재도전 관련 언론 보도가 확인되었습니다.",
+      "news_summary": "기술반환 이슈 이후 빅파마와 손잡고 R&D 재도전에 나선다는 소식이 보도되었습니다. 최근 공시로는 최대주주등소유주식변동신고서가 제출된 상태입니다.",
+      "watch_reason": "회사 관찰 포인트인 기술이전 계약 조건 및 마일스톤 수취 가능성과 연계되는 주제이므로 실제 계약 체결 여부와 세부 조건 확인이 필요합니다.",
+      "previous_context": "이전 이력에서도 기술반환 및 빅파마 협력 토픽이 다뤄졌으며, 동일한 R&D 재도전 맥락의 보도가 이어지고 있으나 세부 계약 사실 확인 데이터는 부족합니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "빅파마 계약 상대방 및 세부 계약 조건(금액, 마일스톤 등) 공시 여부",
+        "관련 파이프라인의 임상 단계 변화 및 기술이전 정식 공시 확인"
       ],
-      "topics": [],
+      "topics": [
+        "기술이전",
+        "빅파마",
+        "R&D재도전"
+      ],
       "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 1,
-        "news_count": 0,
-        "profile_used": true,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "evidence": [
+        "기사 제목: 기술반환 딛고 다시 빅파마와 손잡은 한미약품 … R&D 재도전 성과",
+        "공시: 2026-08-28 최대주주등소유주식변동신고서"
+      ],
+      "generated_by": "gemini"
     },
     "종근당": {
       "company": "종근당",
-      "issue_type": "공시/뉴스",
+      "issue_type": "리스크",
       "priority": "medium",
-      "today_summary": "종근당은 신규 공시 2건과 관련 뉴스 3건이 함께 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 감기약, 출시, 의약품, 표준제조기준 키워드가 반복됩니다.",
-      "watch_reason": "공시는 제목만으로 판단하지 말고 원문에서 금액, 일정, 상대방, 정정 여부를 확인해야 합니다; 동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.",
-      "previous_context": "최근 브리핑에서도 지분승계, 주요주주거래계획, 경영권가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "3세 지분 승계 본격화 보도와 임원·주요주주 거래계획 공시가 제출되었습니다.",
+      "news_summary": "종근당 3세 지분 승계 및 세대교체 관련 보도가 확인되었으며, 최근 임원·주요주주 특정증권등 거래계획 보고서 2건이 공시되었습니다.",
+      "watch_reason": "경영권 및 지분 승계 관련 흐름은 지배구조 변동과 주가 변동성에 영향을 줄 수 있으므로 확인이 필요합니다.",
+      "previous_context": "이전 이력에서도 지분 및 승계 토픽이 관찰되었으며, 거래계획 보고서 제출과 함께 지분 승계 이슈가 연속되어 구체화되는 흐름입니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "임원 및 주요주주 특정증권 거래계획의 매수/매도 규모와 수량",
+        "지분 승계 과정에서의 지배구조 변화 및 주주가치 영향"
       ],
       "topics": [
-        "감기약",
-        "출시",
-        "의약품",
-        "표준제조기준",
-        "반영한"
+        "지분승계",
+        "주요주주거래계획",
+        "경영권"
       ],
-      "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 2,
-        "news_count": 3,
-        "profile_used": false,
-        "past_context_count": 1
-      },
-      "generated_by": "rules"
+      "confidence": "high",
+      "evidence": [
+        "공시 2건: 임원ㆍ주요주주특정증권등거래계획보고서(20260828001906, 20260828001861)",
+        "기사 제목: 종근당 3세 지분 승계 본격화…제약업계 세대교체 잇따라"
+      ],
+      "generated_by": "gemini"
     },
     "유한양행": {
       "company": "유한양행",
-      "issue_type": "뉴스",
+      "issue_type": "홍보",
       "priority": "low",
-      "today_summary": "유한양행 관련 최신 뉴스 3건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 대표, 앞두고, 조욱제, 임기 키워드가 반복됩니다.",
-      "watch_reason": "동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다; 회사 프로필상 관찰 포인트와 연결되는지 확인해야 합니다.",
-      "previous_context": "최근 브리핑에서도 바이오AX, AI신약개발, 기관협력가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "바이오 AX 관련 기관 협업 및 AI 신약개발 연합 구축 뉴스가 보도되었습니다.",
+      "news_summary": "DGIST 등 4개 기관과 바이오 AX 협력 체계를 구축하고 제이인츠바이오가 참여하는 AI 신약개발 연합에 참여한다는 소식이 보도되었습니다.",
+      "watch_reason": "신약 파이프라인 관련 기관 협력 보도이나, 당장 생산 차질이나 실적 및 종속회사 이슈 등 주요 관찰 포인트에 직접적인 영향을 주는 중대 공시는 없습니다.",
+      "previous_context": "이전 이력(AX, 제이인츠바이오)과 동일한 주제의 기사가 지속적으로 보도되는 홍보/협약 성격의 이슈입니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "AI 신약개발 연합 참여를 통한 구체적인 파이프라인 도출 여부",
+        "정식 신약 개발 임상 진입 및 기술 이전 공시 발생 여부"
       ],
       "topics": [
-        "대표",
-        "앞두고",
-        "조욱제",
-        "임기",
-        "만료"
+        "바이오AX",
+        "AI신약개발",
+        "기관협력"
       ],
       "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 0,
-        "news_count": 3,
-        "profile_used": true,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "evidence": [
+        "기사 제목: DGIST·유한양행 등 4개 기관 ‘바이오 AX’ 맞손",
+        "기사 제목: [더벨]제이인츠바이오, 유한양행 참여 AI 신약개발 연합 구축"
+      ],
+      "generated_by": "gemini"
     },
     "녹십자": {
       "company": "녹십자",
-      "issue_type": "뉴스",
+      "issue_type": "홍보",
       "priority": "low",
-      "today_summary": "녹십자 관련 최신 뉴스 3건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 gc, 감기약, 모드콜, 연질캡슐 키워드가 반복됩니다.",
-      "watch_reason": "동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.",
-      "previous_context": "최근 브리핑에서도 단신보도, 제품홍보가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "제품 홍보 및 제약업계 동향 기사에 단신으로 언급되었습니다.",
+      "news_summary": "브랜드 모델 및 단순 제약업계 모음 기사에 포함되어 언급된 것 외에 특이 공시나 대규모 경영 이슈는 확인되지 않았습니다.",
+      "watch_reason": "단순 제품 모델 언급 및 위클리 단신 기사로 사업상 중요도가 낮은 홍보성 보도입니다.",
+      "previous_context": "이전 이력의 범용 백신 개발 관련 보도와 달리 오늘은 단순 브랜드/제품 언급 위주의 단신 보도만 확인됩니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "신규 임상 진행 상황이나 주요 품목허가 관련 공시 발생 여부"
       ],
       "topics": [
-        "gc",
-        "감기약",
-        "모드콜",
-        "연질캡슐",
-        "출시"
+        "단신보도",
+        "제품홍보"
       ],
-      "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 0,
-        "news_count": 3,
-        "profile_used": false,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "confidence": "high",
+      "evidence": [
+        "기사 제목: 종근당, 감기약 '모드콜 연질캡슐' 6종 출시…GC녹십자, '제놀' 모델로 ...",
+        "기사 제목: JW중외제약 GC녹십자 外(제약보국)"
+      ],
+      "generated_by": "gemini"
     },
     "제일약품": {
       "company": "제일약품",
-      "issue_type": "뉴스",
+      "issue_type": "홍보",
       "priority": "low",
-      "today_summary": "제일약품 관련 최신 뉴스 3건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 주가, 신바람, 화이자, 테마 키워드가 반복됩니다.",
-      "watch_reason": "동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.",
-      "previous_context": "최근 브리핑에서도 주가테마, 자체제품, 베오바가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "화이자 테마 관련 주가 동향 및 베오바 치료제 관련 기사가 보도되었습니다.",
+      "news_summary": "화이자 테마주로 인한 주가 상승 언급과 자체 제품(베오바) 전환 기획 기사가 보도되었으나 관련 공시는 없습니다.",
+      "watch_reason": "테마성 주가 움직임 및 제품 소개성 보도로 실질적인 계약이나 실적 변동 공시가 없어 중요도가 낮습니다.",
+      "previous_context": "이전 이력에서 언급된 베오바 급여/시장 관련 보도의 연장선상에 있는 기획 기사 및 주가 테마 보도입니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "베오바 등 주요 자체 제품의 실제 매출 실적 반영 여부",
+        "테마성 주가 변동 외의 정식 공시 사항 발생 여부"
       ],
       "topics": [
-        "주가",
-        "신바람",
-        "화이자",
-        "테마",
-        "개별"
+        "주가테마",
+        "자체제품",
+        "베오바"
       ],
       "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 0,
-        "news_count": 3,
-        "profile_used": false,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "evidence": [
+        "기사 제목: 제일약품 주가 '신바람'… 화이자 테마, 개별 호재 속 옥석 가리기",
+        "기사 제목: 제일약품 '베오바', 과민성방광 치료제 시장 게임체인저 되나"
+      ],
+      "generated_by": "gemini"
     },
     "대웅제약": {
       "company": "대웅제약",
-      "issue_type": "뉴스",
-      "priority": "medium",
-      "today_summary": "대웅제약 관련 최신 뉴스 5건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 서울바이오헬스대상, 수상, 오픈이노베이션, 성과 키워드가 반복됩니다.",
-      "watch_reason": "동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.",
-      "previous_context": "최근 브리핑에서도 서울바이오헬스대상, 오픈이노베이션, 수상보도가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "issue_type": "대외평가",
+      "priority": "low",
+      "today_summary": "제1회 서울바이오헬스대상 수상 관련 보도가 다수 확인되었습니다.",
+      "news_summary": "R&D 및 오픈이노베이션 성과를 인정받아 서울바이오헬스대상을 수상했다는 동일 내용의 홍보성 기사가 5건 보도되었습니다.",
+      "watch_reason": "판단 규칙에 따라 단순 수상 보도는 우선순위를 낮게 평가하며 사업적 임팩트가 제한적입니다.",
+      "previous_context": "이전 이력의 장관 표창 보도에 이어 대외 수상 홍보 기사가 반복되는 흐름입니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "오픈이노베이션을 통한 실질적인 기술이전 또는 임상 성과 공시 여부"
       ],
       "topics": [
         "서울바이오헬스대상",
-        "수상",
         "오픈이노베이션",
-        "성과",
-        "인정"
+        "수상보도"
       ],
-      "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 0,
-        "news_count": 5,
-        "profile_used": false,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "confidence": "high",
+      "evidence": [
+        "기사 5건: 대웅제약, R&D·오픈이노베이션 성과로 '서울바이오헬스대상' 수상 등"
+      ],
+      "generated_by": "gemini"
     },
     "보령": {
       "company": "보령",
-      "issue_type": "뉴스",
-      "priority": "low",
-      "today_summary": "보령 관련 최신 뉴스 1건이 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 재산권, 과세, 기준, 개별공시지가 키워드가 반복됩니다.",
-      "watch_reason": "현재는 참고 수준으로 기록하고 후속 공시·뉴스 발생 여부를 보면 됩니다.",
-      "previous_context": "최근 브리핑에서도 지자체뉴스, 무관이슈가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "issue_type": "참고",
+      "priority": "reference",
+      "today_summary": "기업 보령과 무관한 지자체(보령시) 기사로 확인되어 중요하지 않습니다.",
+      "news_summary": "충남 보령시의 개별공시지가 열람 검증에 관한 지자체 뉴스 1건이 검색된 것으로, 기업 보령의 이슈가 아닙니다.",
+      "watch_reason": "기업 경영 활동과 무관한 지자체 뉴스이므로 검토 대상이 아닙니다.",
+      "previous_context": "이전 이력의 카나브 수출 계약금 관련 보도와 달리 금일 기사는 지자체 행정 뉴스입니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "기업 보령 관련 추가 뉴스 및 공시 재확인"
       ],
       "topics": [
-        "재산권",
-        "과세",
-        "기준",
-        "개별공시지가",
-        "필지"
+        "지자체뉴스",
+        "무관이슈"
       ],
-      "confidence": "low",
-      "evidence": {
-        "disclosure_count": 0,
-        "news_count": 1,
-        "profile_used": false,
-        "past_context_count": 2
-      },
-      "generated_by": "rules"
+      "confidence": "high",
+      "evidence": [
+        "기사 제목: 보령시, '재산권 과세 기준'... 개별공시지가 2170필지 열람 검증"
+      ],
+      "generated_by": "gemini"
     },
     "JW중외제약": {
       "company": "JW중외제약",
-      "issue_type": "공시/뉴스",
+      "issue_type": "허가",
       "priority": "medium",
-      "today_summary": "JW중외제약은 신규 공시 1건과 관련 뉴스 6건이 함께 확인됐습니다.",
-      "news_summary": "오늘 뉴스는 프렌즈, 아이크런치, 출시, 캔디 키워드가 반복됩니다.",
-      "watch_reason": "공시는 제목만으로 판단하지 말고 원문에서 금액, 일정, 상대방, 정정 여부를 확인해야 합니다; 동일 기업 뉴스가 여러 건 반복되어 시장 관심도가 높아졌는지 볼 필요가 있습니다.",
-      "previous_context": "최근 브리핑에서도 보팡글루타이드, 임상3상IND, 투자판단주요경영사항가 관찰됐는지 이어서 비교할 필요가 있습니다.",
+      "today_summary": "보팡글루타이드 임상 3상 IND 신청 보도와 투자판단 주요경영사항 공시가 존재합니다.",
+      "news_summary": "보팡글루타이드 2형 당뇨병 3상 IND 신청 소식과 투자판단관련주요경영사항 공시가 확인된 가운데, 신제품 츄어블 캔디 출시 홍보 기사도 함께 확인되었습니다.",
+      "watch_reason": "임상 3상 IND 신청은 파이프라인 가치에 직결되는 주요 R&D 단계 변화 이슈이므로 원문 공시 내용을 확인할 필요가 있습니다.",
+      "previous_context": "이전 이력에서는 일반 신제품(프렌즈) 관련 기사가 주를 이루었으나, 3상 IND 신청 관련 주요 경영 공시가 추가된 변화가 있습니다.",
       "check_points": [
-        "후속 DART 공시 여부",
-        "동일 주제 뉴스 반복 여부",
-        "회사 프로필의 핵심 관찰 포인트와의 연결성"
+        "투자판단관련주요경영사항 공시 원문의 IND 신청 대상 및 임상 디자인 확인",
+        "식약처/FDA 등 해당 규제기관의 IND 승인 여부 추적"
       ],
       "topics": [
-        "프렌즈",
-        "아이크런치",
-        "출시",
-        "캔디",
-        "확장"
+        "보팡글루타이드",
+        "임상3상IND",
+        "투자판단주요경영사항"
       ],
-      "confidence": "medium",
-      "evidence": {
-        "disclosure_count": 1,
-        "news_count": 6,
-        "profile_used": false,
-        "past_context_count": 1
-      },
-      "generated_by": "rules"
+      "confidence": "high",
+      "evidence": [
+        "공시: 2026-08-28 투자판단관련주요경영사항(접수번호 20260828800800)",
+        "기사 제목: [헬스 HOT 뉴스] JW중외제약, '보팡글루타이드' 2형 당뇨병 3상 IND 신청"
+      ],
+      "generated_by": "gemini"
     }
   }
 }
