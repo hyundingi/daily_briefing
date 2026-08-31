@@ -252,6 +252,12 @@ def normalize_gemini_result(data: Any) -> dict[str, dict[str, Any]]:
 
 
 def call_gemini_analysis(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    enabled = os.getenv("USE_GEMINI", "true").strip().lower() not in {"0", "false", "no", "n"}
+    if not enabled:
+        GEMINI_META.update({"attempted": False, "key_present": bool(os.getenv("GEMINI_API_KEY", "").strip()), "model": "", "status": "disabled", "error": ""})
+        print("[Gemini분석] USE_GEMINI=false 설정으로 Gemini 호출 없이 규칙 기반으로 분석합니다.")
+        return {}
+
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     GEMINI_META.update({"attempted": False, "key_present": bool(api_key), "status": "not_configured", "error": ""})
     if not api_key:

@@ -31,6 +31,7 @@ jobs:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
           NAVER_API_HUB_CLIENT_ID: ${{ secrets.NAVER_API_HUB_CLIENT_ID }}
           NAVER_API_HUB_CLIENT_SECRET: ${{ secrets.NAVER_API_HUB_CLIENT_SECRET }}
+          USE_GEMINI: ${{ github.event_name != 'push' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

@@ -22,6 +22,7 @@ GitHub repository secrets에 아래 값을 등록합니다.
 - `DART_API_KEY`
 - `NAVER_API_HUB_CLIENT_ID`
 - `NAVER_API_HUB_CLIENT_SECRET`
+- `USE_GEMINI` 선택값입니다. `false`면 Gemini 호출 없이 규칙 기반 분석만 합니다. GitHub push 배포 테스트에서는 자동으로 `false`가 됩니다.
 - `GEMINI_API_KEY` 선택값입니다. 등록하면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다.
 - `GEMINI_MODEL` 선택값입니다. 비워두면 `gemini-3.6-flash`를 사용합니다.
 - `SMTP_HOST`
@@ -46,7 +47,7 @@ Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, work
 
 매일 생성되는 분석 결과는 `state/daily_briefings/YYYY-MM-DD.json`에 저장합니다. 다음 실행 때 최근 브리핑 JSON과 `company_profiles/*.json`을 함께 읽어서 “왜 봐야 하는지”, “이전 흐름과 무엇이 달라졌는지”, “확인할 점”을 생성합니다.
 
-`GEMINI_API_KEY`가 있으면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다. 키가 없거나 호출에 실패하면 자동화가 멈추지 않도록 규칙 기반 분석으로 대체합니다. 분석 결과는 매일 `state/daily_briefings/YYYY-MM-DD.json`에 저장되고 다음 실행 때 최근 흐름 비교에 사용됩니다.
+`GEMINI_API_KEY`가 있고 `USE_GEMINI=true`이면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다. 키가 없거나 호출에 실패하면 자동화가 멈추지 않도록 규칙 기반 분석으로 대체합니다. 코드 push로 배포 테스트를 할 때는 Gemini 요청이 쌓이지 않도록 자동으로 `USE_GEMINI=false`가 됩니다. 분석 결과는 매일 `state/daily_briefings/YYYY-MM-DD.json`에 저장되고 다음 실행 때 최근 흐름 비교에 사용됩니다.
 
 ## Company profiles
 
