@@ -39,6 +39,8 @@ GitHub repository secrets에 아래 값을 등록합니다.
 
 Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, workflow가 매일 `public/index.html`과 날짜별 아카이브 페이지를 배포합니다. `public/` 폴더는 과거 브리핑을 보존하기 위해 workflow가 repo에 다시 커밋합니다.
 
+자동 실행 시간은 한국시간 기준 평일 오전 8시 10분입니다.
+
 ## Email
 
 메일은 새 중요 공시가 있을 때만 발송합니다. 실제 메일 발송에 성공한 공시 접수번호만 `state/newsletter_state.json`에 저장해 중복 발송을 막습니다.

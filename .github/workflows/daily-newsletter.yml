@@ -6,7 +6,8 @@ on:
     branches:
       - master
   schedule:
-    - cron: "37 22 * * 0-4"
+    # 08:10 KST, Monday-Friday. GitHub Actions cron uses UTC.
+    - cron: "10 23 * * 0-4"
 
 permissions:
   contents: write
