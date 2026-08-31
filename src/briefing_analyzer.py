@@ -27,6 +27,13 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_META: dict[str, Any] = {
+    "attempted": False,
+    "key_present": False,
+    "model": "",
+    "status": "not_configured",
+    "error": "",
+}
 
 
 def clean(value: object) -> str:
@@ -246,9 +253,12 @@ def normalize_gemini_result(data: Any) -> dict[str, dict[str, Any]]:
 
 def call_gemini_analysis(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    GEMINI_META.update({"attempted": False, "key_present": bool(api_key), "status": "not_configured", "error": ""})
     if not api_key:
+        print("[Gemini분석] GEMINI_API_KEY가 없어 규칙 기반으로 분석합니다.")
         return {}
     model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+    GEMINI_META.update({"attempted": True, "model": model, "status": "running"})
     prompt = {
         "role": "경쟁사 공시/뉴스 브리핑 분석가",
         "goal": "제목 빈도가 아니라 사업 영향, 리스크, 회사 맥락, 과거 흐름 기준으로 오늘 볼 만한 이슈인지 판단합니다.",
@@ -289,11 +299,20 @@ def call_gemini_analysis(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
             },
             timeout=75,
         )
+        if response.status_code >= 400:
+            GEMINI_META.update({"status": "http_error", "error": f"HTTP {response.status_code}: {response.text[:500]}"})
         response.raise_for_status()
         text = extract_gemini_text(response.json())
-        return normalize_gemini_result(json.loads(text))
+        parsed = normalize_gemini_result(json.loads(text))
+        if parsed:
+            GEMINI_META.update({"status": "success", "error": ""})
+        else:
+            GEMINI_META.update({"status": "empty_result", "error": "Gemini returned no usable company items."})
+        return parsed
     except Exception as exc:
-        print(f"[Gemini분석] 호출 실패, 규칙 기반으로 대체합니다: {exc}")
+        if not GEMINI_META.get("error"):
+            GEMINI_META.update({"status": "exception", "error": str(exc)[:500]})
+        print(f"[Gemini분석] 호출 실패, 규칙 기반으로 대체합니다: {GEMINI_META['error']}")
         return {}
 
 
@@ -356,6 +375,7 @@ def analyze_today() -> Path:
         "date": display_date.isoformat(),
         "source_disclosure_date": target_date.isoformat(),
         "generated_by": "gemini" if gemini else "rules",
+        "analysis_meta": GEMINI_META,
         "companies": results,
     }
     output = daily_path(display_date)
