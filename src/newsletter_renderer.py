@@ -204,14 +204,6 @@ def short_title(title: str) -> str:
     return text
 
 
-def make_issue_summary(row: pd.Series) -> str:
-    cached = clean_text(row.get("actual_summary", ""))
-    if cached and not cached.startswith("원문 요약 실패"):
-        return cached
-    title = short_title(row.get("공시명", ""))
-    return f"{title} 공시가 접수됐습니다. 제목을 눌러 원문을 확인해 주세요."
-
-
 def make_check_point(row: pd.Series, analysis_item: dict | None = None) -> str:
     analysis_item = analysis_item or {}
     points = analysis_item.get("check_points") or []
@@ -225,6 +217,46 @@ def make_check_point(row: pd.Series, analysis_item: dict | None = None) -> str:
     if "기술이전" in title or "계약" in title:
         return "계약 상대방, 금액, 권리 범위, 조건부 수익 인식 여부를 확인해야 합니다."
     return "재무수치, 사업 내용, 일정 등 실무 판단에 영향을 주는 변경 사항이 있는지 확인해야 합니다."
+
+
+def first_sentence(value: object, max_chars: int = 95) -> str:
+    text = clean_text(value)
+    if not text:
+        return ""
+    sentence = text
+    endings = [text.find(mark) for mark in [".", "!", "?", "。"] if text.find(mark) >= 0]
+    if endings:
+        sentence = text[: min(endings) + 1]
+    if len(sentence) <= max_chars:
+        return sentence
+    return sentence[:max_chars].rstrip() + "…"
+
+
+def disclosure_badges(row: pd.Series, analysis_item: dict | None = None) -> str:
+    analysis_item = analysis_item or {}
+    issue_type = clean_text(analysis_item.get("issue_type", "")) or clean_text(row.get("카테고리", ""))
+    badges = []
+    if issue_type:
+        badges.append(
+            f'<span style="display:inline-block; margin:0 6px 6px 0; padding:6px 10px; background-color:#f3efe7; color:#665f57; border-radius:999px; font-size:13px; line-height:1.35; font-weight:700;">{esc(issue_type)}</span>'
+        )
+    if int(row.get("_score", 0) or 0) > 0:
+        badges.append(
+            '<span style="display:inline-block; margin:0 6px 6px 0; padding:6px 10px; background-color:#fff3d5; color:#8a5b00; border-radius:999px; font-size:13px; line-height:1.35; font-weight:700;">💡 공시 우선 확인 필요</span>'
+        )
+    return "".join(badges)
+
+
+def make_important_point(row: pd.Series, analysis_item: dict | None = None) -> str:
+    analysis_item = analysis_item or {}
+    parts = [first_sentence(analysis_item.get("watch_reason", "")), first_sentence(analysis_item.get("previous_context", ""))]
+    check_points = [clean_text(item) for item in analysis_item.get("check_points", []) if clean_text(item)]
+    if len([part for part in parts if part]) < 2 and check_points:
+        parts.append("확인: " + first_sentence(check_points[0], 80))
+    text = " ".join(part for part in parts if part)
+    if text:
+        return text
+    return make_check_point(row, analysis_item)
 
 
 def render_company_news_list(news: pd.DataFrame, company: str) -> str:
@@ -299,15 +331,8 @@ def render_news_item(row: pd.Series, company: str) -> str:
 def summarize_company_news(rows: pd.DataFrame, analysis_item: dict | None = None) -> str:
     analysis_item = analysis_item or {}
     ai_summary = clean_text(analysis_item.get("news_summary", ""))
-    watch_reason = clean_text(analysis_item.get("watch_reason", ""))
-    previous_context = clean_text(analysis_item.get("previous_context", ""))
     if ai_summary:
-        parts = [ai_summary]
-        if watch_reason:
-            parts.append("왜 봐야 하나: " + watch_reason)
-        if previous_context:
-            parts.append("이전 흐름: " + previous_context)
-        return " ".join(parts)
+        return ai_summary
     if rows.empty:
         return ""
     words: list[str] = []
@@ -322,21 +347,12 @@ def summarize_company_news(rows: pd.DataFrame, analysis_item: dict | None = None
     return "오늘은 " + ", ".join(topics) + " 관련 보도가 눈에 띕니다."
 
 
-def render_analysis_lines(analysis_item: dict | None = None, fallback_summary: str = "") -> str:
+def render_news_analysis(analysis_item: dict | None = None, fallback_summary: str = "") -> str:
     analysis_item = analysis_item or {}
     rows = [
-        ("오늘 요약", clean_text(analysis_item.get("today_summary", "")) or fallback_summary),
+        ("요약", clean_text(analysis_item.get("today_summary", "")) or fallback_summary),
         ("주요 내용", clean_text(analysis_item.get("news_summary", ""))),
-        ("왜 봐야 하나", clean_text(analysis_item.get("watch_reason", ""))),
-        ("이전 흐름", clean_text(analysis_item.get("previous_context", ""))),
     ]
-    check_points = [clean_text(item) for item in analysis_item.get("check_points", []) if clean_text(item)]
-    if check_points:
-        rows.append(("확인할 점", " / ".join(check_points[:3])))
-    priority = clean_text(analysis_item.get("priority", ""))
-    issue_type = clean_text(analysis_item.get("issue_type", ""))
-    if priority or issue_type:
-        rows.insert(0, ("판단", " · ".join(part for part in [issue_type, priority] if part)))
 
     lines = []
     for label, value in rows:
@@ -373,7 +389,7 @@ def render_news_section(news: pd.DataFrame, analysis: dict[str, dict]) -> str:
         company = clean_text(company)
         items = "".join(render_news_item(row, company) for _, row in rows.iterrows())
         analysis_item = company_analysis(analysis, company)
-        analysis_html = render_analysis_lines(analysis_item, summarize_company_news(rows, analysis_item))
+        analysis_html = render_news_analysis(analysis_item, summarize_company_news(rows, analysis_item))
         sections.append(
             f'''
                     <div style="padding:20px 0; border-bottom:1px solid #eee9df;">
@@ -400,11 +416,9 @@ def render_issue_card(row: pd.Series, analysis: dict[str, dict]) -> str:
     color = company_color(company)
     title = short_title(row.get("공시명", ""))
     link = clean_text(row.get("DART링크", "")) or DART_VIEWER_URL + clean_text(row.get("접수번호", ""))
-    summary = make_issue_summary(row)
     current_analysis = company_analysis(analysis, company)
-    watch_reason = clean_text(current_analysis.get("watch_reason", ""))
-    previous_context = clean_text(current_analysis.get("previous_context", ""))
-    check = make_check_point(row, current_analysis)
+    important_point = make_important_point(row, current_analysis)
+    badges = disclosure_badges(row, current_analysis)
 
     return f'''
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:18px; background-color:#ffffff; border-radius:16px; overflow:hidden;">
@@ -412,32 +426,15 @@ def render_issue_card(row: pd.Series, analysis: dict[str, dict]) -> str:
                   <td class="issue-card" style="padding:26px 26px 25px;">
                     <div style="margin-bottom:11px; font-size:0;">
                       <span class="company-tag" style="display:inline-block; margin:0 8px 0 0; padding:7px 13px; background-color:{color}; color:#ffffff; border-radius:999px; font-size:14px; line-height:1.35; font-weight:700;">{esc(company)}</span>
+                      {badges}
                     </div>
 
                     <div class="section-label" style="margin:0 0 8px; font-size:14px; line-height:1.5; color:#6d6255; font-weight:700;">공시</div>
                     <h2 class="issue-title" style="margin:0 0 13px; font-size:25px; line-height:1.42; letter-spacing:-0.015em; color:#172536; font-weight:700;">
                       <a href="{esc(link)}" style="color:#172536; text-decoration:none;">{esc(title)}</a>
                     </h2>
-                    <p style="margin:0 0 18px; font-size:17px; line-height:1.82; color:#3f4d5d;">{esc(summary)}</p>
-
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#fff7eb; border-radius:12px; margin-bottom:12px;">
-                      <tr><td style="padding:15px 17px; font-size:15px; line-height:1.75; color:#4d5966;"><strong style="color:#26384a;">왜 봐야 하나</strong><br>{esc(watch_reason or '원문에서 실제 변경 내용과 후속 영향 여부를 확인해야 합니다.')}</td></tr>
-                    </table>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#faf8f3; border-radius:12px; margin-bottom:12px;">
-                      <tr><td style="padding:15px 17px; font-size:15px; line-height:1.75; color:#4d5966;"><strong style="color:#26384a;">이전 흐름</strong><br>{esc(previous_context or '누적 이력이 부족해 이번 공시를 기준점으로 저장합니다.')}</td></tr>
-                    </table>
-
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#faf8f3; border-radius:12px;">
-                      <tr>
-                        <td style="padding:16px 18px;">
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td class="info-label" style="width:74px; padding:2px 14px 0 0; vertical-align:top; font-size:14px; line-height:1.65; color:#756c61; font-weight:700;">확인할 점</td>
-                              <td class="info-body" style="vertical-align:top; font-size:15px; line-height:1.75; color:#424f5e;">{esc(check)}</td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#fff7eb; border-radius:12px;">
+                      <tr><td style="padding:15px 17px; font-size:15px; line-height:1.75; color:#4d5966;"><strong style="color:#26384a;">중요 포인트</strong><br>{esc(important_point)}</td></tr>
                     </table>
                   </td>
                 </tr>
@@ -448,29 +445,16 @@ def render_other_disclosure(row: pd.Series, analysis: dict[str, dict]) -> str:
     company = clean_text(row.get("회사", ""))
     title = short_title(row.get("공시명", ""))
     link = clean_text(row.get("DART링크", "")) or DART_VIEWER_URL + clean_text(row.get("접수번호", ""))
-    summary = make_issue_summary(row)
     current_analysis = company_analysis(analysis, company)
-    watch_reason = clean_text(current_analysis.get("watch_reason", ""))
-    previous_context = clean_text(current_analysis.get("previous_context", ""))
-    check = make_check_point(row, current_analysis)
-    analysis_html = render_analysis_lines(
-        {
-            "today_summary": "",
-            "news_summary": "",
-            "watch_reason": watch_reason,
-            "previous_context": previous_context,
-            "check_points": [check] if check else [],
-            "priority": current_analysis.get("priority", ""),
-            "issue_type": current_analysis.get("issue_type", ""),
-        }
-    )
+    important_point = make_important_point(row, current_analysis)
+    badges = disclosure_badges(row, current_analysis)
     return f'''
                       <tr>
-                        <td class="other-company" style="width:110px; padding:21px 14px 21px 0; vertical-align:top; font-size:14px; line-height:1.6; color:#526269; font-weight:700;"><span style="display:inline-block; padding:6px 11px; background-color:{company_color(company)}; color:#ffffff; border-radius:999px;">{esc(company)}</span></td>
+                        <td class="other-company" style="width:110px; padding:21px 14px 21px 0; vertical-align:top; font-size:14px; line-height:1.6; color:#526269; font-weight:700;"><span style="display:inline-block; margin:0 0 6px 0; padding:6px 11px; background-color:{company_color(company)}; color:#ffffff; border-radius:999px;">{esc(company)}</span></td>
                         <td class="other-detail" style="padding:21px 0; vertical-align:top;">
+                          <div style="margin-bottom:6px; font-size:0;">{badges}</div>
                           <div style="font-size:18px; line-height:1.58; color:#26363b; font-weight:700; margin-bottom:4px;"><a href="{esc(link)}" style="color:#26363b; text-decoration:none;">{esc(title)}</a></div>
-                          <div style="font-size:15px; line-height:1.75; color:#64747a;">{esc(summary)}</div>
-                          {analysis_html}
+                          <div style="margin-top:9px; padding:12px 14px; background-color:#fff7eb; border-radius:12px; font-size:14px; line-height:1.7; color:#4d5966;"><strong style="color:#26384a;">중요 포인트</strong><br>{esc(important_point)}</div>
                         </td>
                       </tr>'''
 
