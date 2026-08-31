@@ -26,7 +26,7 @@ ISSUE_HISTORY_PATH = STATE_DIR / "issue_history.json"
 load_dotenv(PROJECT_ROOT / ".env")
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_META: dict[str, Any] = {
     "attempted": False,
     "key_present": False,

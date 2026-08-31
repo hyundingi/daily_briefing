@@ -23,7 +23,7 @@ GitHub repository secrets에 아래 값을 등록합니다.
 - `NAVER_API_HUB_CLIENT_ID`
 - `NAVER_API_HUB_CLIENT_SECRET`
 - `GEMINI_API_KEY` 선택값입니다. 등록하면 Gemini가 회사별 이슈 중요도와 요약을 작성합니다.
-- `GEMINI_MODEL` 선택값입니다. 비워두면 `gemini-2.5-flash`를 사용합니다.
+- `GEMINI_MODEL` 선택값입니다. 비워두면 `gemini-3.6-flash`를 사용합니다.
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USERNAME`
