@@ -1,8 +1,25 @@
 {
-  "last_sent_date": "2026-08-31",
+  "last_sent_date": "2026-09-02",
   "sent_receipts": [
     "20260826800466",
-    "20260828800800"
+    "20260828800800",
+    "20260901800500"
   ],
-  "sent_news_links": []
+  "sent_news_links": [
+    "http://www.bizwnews.com/news/articleView.html?idxno=144936",
+    "http://www.financialreview.co.kr/news/articleView.html?idxno=44518",
+    "http://www.hansbiz.co.kr/news/articleView.html?idxno=861421",
+    "https://biz.sbs.co.kr/article_hub/20000332195?division=NAVER",
+    "https://news.sbs.co.kr/news/endPage.do?news_id=N1008732761&plink=ORI&cooper=NAVER",
+    "https://www.apsk.co.kr/news/articleView.html?idxno=540326",
+    "https://www.etnews.com/20260901000444",
+    "https://www.hitnews.co.kr/news/articleView.html?idxno=78797",
+    "https://www.medicopharma.co.kr/news/articleView.html?idxno=69376",
+    "https://www.newsis.com/view/NISX20260902_0003772493",
+    "https://www.ngetnews.com/news/articleView.html?idxno=552906",
+    "https://www.sedaily.com/article/20085972?ref=naver",
+    "https://www.thebell.co.kr/free/content/ArticleView.asp?key=202609011312030440104270",
+    "https://www.yna.co.kr/view/AKR20260901181851004?input=1195m",
+    "https://www.youthdaily.co.kr/news/article.html?no=226205"
+  ]
 }

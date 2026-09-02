@@ -1,5 +1,22 @@
 [
   {
+    "date": "2026-09-02",
+    "title": "2026.09.02 경쟁사 모닝 브리핑",
+    "path": "archive/2026-09-02.html",
+    "disclosure_count": 1,
+    "news_count": 15,
+    "companies": [
+      "종근당",
+      "유한양행",
+      "녹십자",
+      "JW중외제약",
+      "일동제약"
+    ],
+    "categories": [
+      "사업/계약"
+    ]
+  },
+  {
     "date": "2026-09-01",
     "title": "2026.09.01 경쟁사 모닝 브리핑",
     "path": "archive/2026-09-01.html",
