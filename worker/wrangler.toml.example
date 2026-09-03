@@ -1,0 +1,15 @@
+name = "competitor-newsletter"
+main = "src/index.js"
+compatibility_date = "2026-09-03"
+
+[[kv_namespaces]]
+binding = "BRIEFING_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# Secrets to set with `wrangler secret put NAME`:
+# DART_API_KEY
+# NAVER_API_HUB_CLIENT_ID
+# NAVER_API_HUB_CLIENT_SECRET
+# GEMINI_API_KEY
+# GEMINI_MODEL                 optional, default: gemini-3.6-flash
+# UPDATE_PASSWORD              optional but recommended

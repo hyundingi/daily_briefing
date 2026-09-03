@@ -7,3 +7,6 @@ state/dart_disclosure_view.csv
 state/dart_disclosure_summary_cache.csv
 state/news_articles.csv
 newsletter_preview.html
+worker/wrangler.toml
+worker/node_modules/
+.wrangler/

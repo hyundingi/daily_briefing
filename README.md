@@ -3,7 +3,8 @@
 경쟁사 DART 공시와 NAVER API HUB 뉴스를 수집해 매일 아침 두 가지 결과물을 만듭니다.
 
 - GitHub Pages: 날짜별 브리핑을 계속 쌓아 두는 아카이브 페이지
-- Email: 그날 새로 확인해야 할 중요 공시가 있을 때만 보내는 알림용 HTML
+- Email: 그날 새로 확인한 신규 공시 또는 최신 뉴스가 있을 때 보내는 알림용 HTML
+- Cloudflare Worker: 저장된 공시/뉴스를 빠르게 보여주고, 업데이트 버튼으로 새 데이터를 수집하는 웹앱 후보
 
 ## Local run
 
@@ -43,7 +44,22 @@ Repository Settings에서 Pages source를 `GitHub Actions`로 설정하면, work
 
 ## Email
 
-메일은 새 중요 공시가 있을 때만 발송합니다. 실제 메일 발송에 성공한 공시 접수번호만 `state/newsletter_state.json`에 저장해 중복 발송을 막습니다.
+메일은 새 신규 공시 또는 최신 뉴스가 있을 때 발송합니다. 실제 메일 발송에 성공한 공시 접수번호와 뉴스 링크만 `state/newsletter_state.json`에 저장해 중복 발송을 막습니다.
+
+## Cloudflare Worker
+
+`worker/` 폴더에는 GitHub Pages를 대체하거나 보완할 수 있는 Cloudflare Worker + KV 버전의 1차 구현이 들어 있습니다.
+
+- 공시/뉴스 탭 분리
+- 기업 선택 옵션
+- 카테고리 선택 옵션
+- 검색창
+- 아카이브 탭
+- 업데이트 버튼
+- `lock:refresh` 기반 중복 업데이트 방지
+- KV에 최신 브리핑, 날짜별 브리핑, 회사별 압축 이력 저장
+
+초기 설정과 배포 방법은 `worker/README.md`를 참고합니다.
 
 ## AI briefing memory
 
