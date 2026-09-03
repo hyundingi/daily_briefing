@@ -72,9 +72,11 @@ async function refresh(request, env) {
 
   await env.BRIEFING_KV.put("lock:refresh", JSON.stringify({ started_at: new Date().toISOString() }), { expirationTtl: 300 });
   try {
-    const disclosures = await collectDisclosures(env);
-    const news = await collectNews(env);
-    const analysis = await analyze(env, disclosures, news);
+    const diagnostics = [];
+    const disclosures = await collectDisclosures(env, diagnostics);
+    const news = await collectNews(env, diagnostics);
+    const analysis = await analyze(env, disclosures, news, diagnostics);
+    ensureUsableRefresh(disclosures, news, diagnostics);
     const now = new Date();
     const briefing = {
       ok: true,
@@ -83,6 +85,7 @@ async function refresh(request, env) {
       disclosures,
       news,
       analysis,
+      diagnostics,
       summary: {
         disclosure_count: disclosures.length,
         news_count: news.length,
@@ -98,7 +101,11 @@ async function refresh(request, env) {
 }
 
 async function requireUpdatePassword(request, env) {
-  if (!env.UPDATE_PASSWORD) return;
+  if (!env.UPDATE_PASSWORD) {
+    const error = new Error("UPDATE_PASSWORD secret이 설정되지 않아 업데이트를 실행할 수 없습니다.");
+    error.status = 503;
+    throw error;
+  }
   const password = request.headers.get("x-update-password") || "";
   if (password !== env.UPDATE_PASSWORD) {
     const error = new Error("업데이트 비밀번호가 필요합니다.");
@@ -140,8 +147,11 @@ async function saveBriefing(env, briefing) {
   }
 }
 
-async function collectDisclosures(env) {
-  if (!env.DART_API_KEY) return [];
+async function collectDisclosures(env, diagnostics) {
+  if (!env.DART_API_KEY) {
+    diagnostics.push({ step: "dart", status: "missing_secret" });
+    return [];
+  }
   const end = yyyymmdd(new Date());
   const begin = yyyymmdd(addDays(new Date(), -30));
   const rows = [];
@@ -156,7 +166,14 @@ async function collectDisclosures(env) {
     url.searchParams.set("sort", "date");
     url.searchParams.set("sort_mth", "desc");
 
-    const payload = await fetchJson(url.toString());
+    let payload;
+    try {
+      payload = await fetchJson(url.toString(), { redirect: "manual" });
+    } catch (_) {
+      diagnostics.push({ step: "dart", company: company.name, status: "request_error", reason: safeError(_) });
+      continue;
+    }
+    diagnostics.push({ step: "dart", company: company.name, status: payload.status || "unknown", count: Array.isArray(payload.list) ? payload.list.length : 0 });
     if (payload.status === "013") continue;
     if (payload.status !== "000") continue;
 
@@ -184,8 +201,11 @@ async function collectDisclosures(env) {
   return dedupe(rows, (item) => item.receipt_no).sort((a, b) => String(b.date).localeCompare(String(a.date)) || companyIndex(a.company) - companyIndex(b.company));
 }
 
-async function collectNews(env) {
-  if (!env.NAVER_API_HUB_CLIENT_ID || !env.NAVER_API_HUB_CLIENT_SECRET) return [];
+async function collectNews(env, diagnostics) {
+  if (!env.NAVER_API_HUB_CLIENT_ID || !env.NAVER_API_HUB_CLIENT_SECRET) {
+    diagnostics.push({ step: "news", status: "missing_secret" });
+    return [];
+  }
   const since = addDays(new Date(), -2).getTime();
   const rows = [];
 
@@ -197,12 +217,19 @@ async function collectNews(env) {
     url.searchParams.set("sort", "date");
     url.searchParams.set("format", "json");
 
-    const payload = await fetchJson(url.toString(), {
-      headers: {
-        "X-NCP-APIGW-API-KEY-ID": env.NAVER_API_HUB_CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": env.NAVER_API_HUB_CLIENT_SECRET,
-      },
-    });
+    let payload;
+    try {
+      payload = await fetchJson(url.toString(), {
+        headers: {
+          "X-NCP-APIGW-API-KEY-ID": env.NAVER_API_HUB_CLIENT_ID,
+          "X-NCP-APIGW-API-KEY": env.NAVER_API_HUB_CLIENT_SECRET,
+        },
+      });
+    } catch (_) {
+      diagnostics.push({ step: "news", company: company.name, status: "request_error", reason: safeError(_) });
+      continue;
+    }
+    diagnostics.push({ step: "news", company: company.name, status: "ok", count: Array.isArray(payload.items) ? payload.items.length : 0 });
 
     for (const item of payload.items || []) {
       const title = cleanHtml(item.title);
@@ -228,9 +255,12 @@ async function collectNews(env) {
   return dedupe(rows, (item) => `${item.company}:${normalize(item.title)}`).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)) || companyIndex(a.company) - companyIndex(b.company));
 }
 
-async function analyze(env, disclosures, news) {
+async function analyze(env, disclosures, news, diagnostics) {
   const fallback = fallbackAnalysis(disclosures, news);
-  if (!env.GEMINI_API_KEY) return fallback;
+  if (!env.GEMINI_API_KEY) {
+    diagnostics.push({ step: "gemini", status: "missing_secret" });
+    return fallback;
+  }
 
   const context = { companies: [] };
   for (const company of TARGET_COMPANIES.map((item) => item.name)) {
@@ -283,11 +313,17 @@ async function analyze(env, disclosures, news) {
         generationConfig: { responseMimeType: "application/json" },
       }),
     });
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+      diagnostics.push({ step: "gemini", status: "http_error", code: response.status });
+      return fallback;
+    }
     const payload = await response.json();
     const text = extractGeminiText(payload);
-    return mergeAnalysis(fallback, normalizeGemini(JSON.parse(text)));
+    const normalized = normalizeGemini(JSON.parse(text));
+    diagnostics.push({ step: "gemini", status: Object.keys(normalized).length ? "success" : "empty_result", company_count: Object.keys(normalized).length });
+    return mergeAnalysis(fallback, normalized);
   } catch (_) {
+    diagnostics.push({ step: "gemini", status: "exception", reason: safeError(_) });
     return fallback;
   }
 }
@@ -385,8 +421,50 @@ function isCompanyArticle(company, title) {
 
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, init);
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+  if (response.status >= 300 && response.status < 400) {
+    const error = new Error("redirect_response");
+    error.status = response.status;
+    error.host = new URL(url).host;
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error("fetch_not_ok");
+    error.status = response.status;
+    error.host = new URL(url).host;
+    throw error;
+  }
   return await response.json();
+}
+
+function ensureUsableRefresh(disclosures, news, diagnostics) {
+  if (disclosures.length || news.length) return;
+  const apiOk = diagnostics.some((item) => item.step === "dart" && ["000", "013"].includes(item.status)) || diagnostics.some((item) => item.step === "news" && item.status === "ok");
+  const failed = diagnostics.some((item) => ["request_error", "http_error", "exception"].includes(item.status));
+  if (failed && !apiOk) {
+    const error = new Error("외부 API 호출이 실패해 기존 데이터를 유지합니다.");
+    error.status = 502;
+    throw error;
+  }
+}
+
+function safeError(error) {
+  if (!error) return "unknown";
+  const parts = [];
+  if (error.status) parts.push(`http_${error.status}`);
+  if (error.name) parts.push(error.name);
+  if (error.message) parts.push(sanitizeErrorMessage(error.message));
+  if (parts.length) return parts.join(":").slice(0, 160);
+  return "error";
+}
+
+function sanitizeErrorMessage(value) {
+  return String(value || "")
+    .replace(/https?:\/\/[^\s]+/gi, "[url]")
+    .replace(/crtfc_key=[^&\s]+/gi, "crtfc_key=***")
+    .replace(/key=[^&\s]+/gi, "key=***")
+    .replace(/api[_-]?key[^&\s]*/gi, "api_key=***")
+    .replace(/AIza[0-9A-Za-z_-]+/g, "AIza***")
+    .replace(/[A-Za-z0-9_-]{24,}/g, "***");
 }
 
 async function readJson(env, key, fallback) {
@@ -588,7 +666,7 @@ function renderPage() {
     }
 
     function render() {
-      $('status').textContent = briefing.updated_at ? '마지막 업데이트: ' + briefing.updated_at : '저장된 브리핑 없음';
+      $('status').textContent = briefing.updated_at ? '데이터 업데이트: ' + briefing.updated_at : '저장된 브리핑 없음';
       $('count-disclosures').textContent = briefing.summary?.disclosure_count ?? briefing.disclosures?.length ?? 0;
       $('count-news').textContent = briefing.summary?.news_count ?? briefing.news?.length ?? 0;
       $('count-important-disclosures').textContent = briefing.summary?.important_disclosure_count ?? 0;
@@ -658,24 +736,27 @@ function renderPage() {
       button.disabled = true;
       button.textContent = '업데이트 중...';
       $('status').textContent = '새 데이터 확인 중... 기존 데이터는 그대로 유지됩니다.';
-      let password = localStorage.getItem('updatePassword') || '';
-      let response = await fetch('/api/refresh', { method:'POST', headers:{ 'x-update-password': password } });
-      if (response.status === 401) {
-        password = prompt('업데이트 비밀번호를 입력해주세요.') || '';
-        localStorage.setItem('updatePassword', password);
-        response = await fetch('/api/refresh', { method:'POST', headers:{ 'x-update-password': password } });
+      try {
+        const password = prompt('업데이트 비밀번호를 입력해주세요.') || '';
+        if (!password) throw new Error('업데이트 비밀번호가 입력되지 않았습니다.');
+        const response = await fetch('/api/refresh', { method:'POST', headers:{ 'x-update-password': password } });
+        if (response.status === 409) {
+          alert('이미 업데이트가 진행 중입니다. 잠시 후 다시 확인해주세요.');
+        } else if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          alert(errorBody.error || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
+        } else {
+          await response.json();
+          await load();
+          alert('업데이트 완료');
+        }
+      } catch (error) {
+        alert(error.message || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
+      } finally {
+        button.disabled = false;
+        button.textContent = '업데이트';
+        render();
       }
-      if (response.status === 409) alert('이미 업데이트가 진행 중입니다. 잠시 후 다시 확인해주세요.');
-      else if (!response.ok) alert('업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
-      else {
-        const data = await response.json();
-        briefing = data.briefing;
-        await load();
-        alert('업데이트 완료');
-      }
-      button.disabled = false;
-      button.textContent = '업데이트';
-      render();
     };
     load().catch((error) => { $('status').textContent = '데이터를 불러오지 못했습니다.'; console.error(error); });
   </script>
