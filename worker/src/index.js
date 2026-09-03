@@ -44,6 +44,7 @@ const COMPANY_PROFILES = {
 
 const IMPORTANT_KEYWORDS = ["기술이전", "라이선스", "임상", "품목허가", "계약", "중대재해", "투자판단", "합병", "분할", "취득", "처분", "유상증자", "전환사채"];
 const IMPORTANT_CATEGORIES = new Set(["사업/계약", "투자/M&A", "자금조달"]);
+const MAX_STORED_ITEMS = 500;
 
 export default {
   async fetch(request, env) {
@@ -72,11 +73,18 @@ async function refresh(request, env) {
 
   await env.BRIEFING_KV.put("lock:refresh", JSON.stringify({ started_at: new Date().toISOString() }), { expirationTtl: 300 });
   try {
+    const previous = await latestBriefing(env);
     const diagnostics = [];
-    const disclosures = await collectDisclosures(env, diagnostics);
-    const news = await collectNews(env, diagnostics);
-    const analysis = await analyze(env, disclosures, news, diagnostics);
-    ensureUsableRefresh(disclosures, news, diagnostics);
+    const collectedDisclosures = await collectDisclosures(env, diagnostics);
+    const collectedNews = await collectNews(env, diagnostics);
+    const analysis = await analyze(env, collectedDisclosures, collectedNews, diagnostics);
+    ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
+    const added = {
+      disclosures: countNewRows(collectedDisclosures, previous.disclosures || [], disclosureKey),
+      news: countNewRows(collectedNews, previous.news || [], newsKey),
+    };
+    const disclosures = mergeDisclosures(collectedDisclosures, previous.disclosures || []);
+    const news = mergeNews(collectedNews, previous.news || []);
     const now = new Date();
     const briefing = {
       ok: true,
@@ -84,7 +92,7 @@ async function refresh(request, env) {
       updated_at: kstTimestamp(now),
       disclosures,
       news,
-      analysis,
+      analysis: { ...(previous.analysis || {}), ...analysis },
       diagnostics,
       summary: {
         disclosure_count: disclosures.length,
@@ -94,7 +102,7 @@ async function refresh(request, env) {
       },
     };
     await saveBriefing(env, briefing);
-    return jsonResponse({ ok: true, briefing });
+    return jsonResponse({ ok: true, briefing, added });
   } finally {
     await env.BRIEFING_KV.delete("lock:refresh");
   }
@@ -447,6 +455,31 @@ function ensureUsableRefresh(disclosures, news, diagnostics) {
   }
 }
 
+function mergeDisclosures(incoming, existing) {
+  return dedupe([...(incoming || []), ...(existing || [])], disclosureKey)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || companyIndex(a.company) - companyIndex(b.company))
+    .slice(0, MAX_STORED_ITEMS);
+}
+
+function mergeNews(incoming, existing) {
+  return dedupe([...(incoming || []), ...(existing || [])], newsKey)
+    .sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")) || companyIndex(a.company) - companyIndex(b.company))
+    .slice(0, MAX_STORED_ITEMS);
+}
+
+function countNewRows(incoming, existing, keyFn) {
+  const existingKeys = new Set((existing || []).map(keyFn).filter(Boolean));
+  return dedupe(incoming || [], keyFn).filter((item) => !existingKeys.has(keyFn(item))).length;
+}
+
+function disclosureKey(item) {
+  return item && item.receipt_no ? String(item.receipt_no) : `${item?.company || ""}:${normalize(item?.title || "")}:${item?.date || ""}`;
+}
+
+function newsKey(item) {
+  return item ? `${item.company || ""}:${normalize(item.title || "")}` : "";
+}
+
 function safeError(error) {
   if (!error) return "unknown";
   const parts = [];
@@ -630,8 +663,8 @@ function renderPage() {
       </div>
     </header>
     <section class="summary">
-      <div class="metric">신규 공시<strong id="count-disclosures">0</strong></div>
-      <div class="metric">최신 뉴스<strong id="count-news">0</strong></div>
+      <div class="metric">전체 공시<strong id="count-disclosures">0</strong></div>
+      <div class="metric">전체 뉴스<strong id="count-news">0</strong></div>
       <div class="metric">중요 공시<strong id="count-important-disclosures">0</strong></div>
       <div class="metric">중요 뉴스<strong id="count-important-news">0</strong></div>
     </section>
@@ -746,9 +779,9 @@ function renderPage() {
           const errorBody = await response.json().catch(() => ({}));
           alert(errorBody.error || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
         } else {
-          await response.json();
+          const data = await response.json();
           await load();
-          alert('업데이트 완료');
+          alert('업데이트 완료: 새 공시 ' + (data.added?.disclosures ?? 0) + '건, 새 뉴스 ' + (data.added?.news ?? 0) + '건 추가');
         }
       } catch (error) {
         alert(error.message || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
