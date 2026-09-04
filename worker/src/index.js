@@ -470,7 +470,7 @@ async function analyze(env, disclosures, news, diagnostics) {
           body: JSON.stringify(body),
         });
         if (!response.ok) {
-          diagnostics.push({ step: "gemini", status: "http_error", model, mode: responseMode, code: response.status, reason: safeError(await response.text()) });
+          diagnostics.push({ step: "gemini", status: "http_error", model, mode: responseMode, code: response.status, reason: geminiErrorReason(await response.text()) });
           continue;
         }
         const payload = await response.json();
@@ -538,6 +538,16 @@ function mergeAnalysis(fallback, gemini) {
 
 function extractGeminiText(payload) {
   return (payload.candidates || []).flatMap((candidate) => ((candidate.content || {}).parts || []).map((part) => part.text || "")).join("\n").trim();
+}
+
+function geminiErrorReason(text) {
+  try {
+    const parsed = JSON.parse(text || "{}");
+    const error = parsed.error || {};
+    return [error.status, error.message].filter(Boolean).join(": ").slice(0, 300) || "gemini_error";
+  } catch (_) {
+    return sanitizeErrorMessage(text).slice(0, 300) || "gemini_error";
+  }
 }
 
 function extractJson(text) {
@@ -647,6 +657,7 @@ function newsKey(item) {
 
 function safeError(error) {
   if (!error) return "unknown";
+  if (typeof error === "string") return sanitizeErrorMessage(error).slice(0, 300) || "error";
   const parts = [];
   if (error.status) parts.push(`http_${error.status}`);
   if (error.name) parts.push(error.name);
