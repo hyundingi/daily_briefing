@@ -202,6 +202,7 @@ async function summarizeMissing(request, env) {
     const statements = itemSummaryStatements(env, summaries, nowText);
     if (statements.length) await env.DB.batch(statements);
     const remaining = await countMissingItemSummaries(env);
+    console.log("summarize_missing_result", JSON.stringify({ attempted, saved: statements.length, remaining, diagnostics }));
     return jsonResponse({ ok: true, attempted, saved: statements.length, remaining, diagnostics });
   } finally {
     await env.BRIEFING_KV.delete("lock:summarize");
@@ -1195,8 +1196,11 @@ function renderPage() {
         } else {
           const data = await response.json();
           await load();
+          const geminiStatus = (data.diagnostics || []).filter((item) => item.step === 'gemini_item').map((item) => [item.status, item.code, item.reason].filter(Boolean).join(' / ')).join('\\n');
           if ((data.attempted || 0) === 0) {
             alert('AI 요약을 채울 항목이 없습니다.');
+          } else if ((data.saved || 0) === 0) {
+            alert('AI 요약 저장 0건입니다.\\n시도 항목: ' + (data.attempted || 0) + '건\\n' + (geminiStatus ? 'Gemini 상태:\\n' + geminiStatus : 'Gemini 응답 진단 정보가 없습니다.'));
           } else {
             alert('AI 요약 완료: ' + (data.saved || 0) + '건 저장, 남은 항목 ' + (data.remaining || 0) + '건');
           }
