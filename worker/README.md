@@ -19,6 +19,7 @@ Cloudflare Worker + D1로 운영되는 경쟁사 브리핑 웹앱입니다.
 - `disclosures`: 공시 데이터
 - `news_articles`: 뉴스 기사 데이터
 - `ai_briefings`: Gemini 요약/판단 결과
+- `item_ai_summaries`: 페이지 카드에 붙는 개별 공시/기사 Gemini 요약
 - `newsletter_runs`: 뉴스레터 발송 기록과 HTML 전문
 - `newsletter_items`: 뉴스레터에 포함된 공시/뉴스 목록
 - `refresh_runs`: 업데이트 실행 로그
@@ -88,8 +89,8 @@ pnpm deploy
 2. `UPDATE_PASSWORD` 입력
 3. Worker가 DART 공시와 NAVER API HUB 뉴스를 수집
 4. D1에 이미 있는 항목은 건너뜀
-5. 새 항목이 있으면 Gemini 요약 생성
-6. Gemini 결과가 성공이면 `ai_briefings`에 저장
+5. 새 항목이 있으면 Gemini가 개별 공시/기사 요약 생성
+6. Gemini 결과가 성공이면 `item_ai_summaries`에 저장
 7. 페이지는 최신 D1 데이터를 다시 불러옴
 
 새 항목이 없으면 Gemini를 호출하지 않습니다.
@@ -107,6 +108,7 @@ pnpm deploy
 - 공시
 - 뉴스
 - AI 브리핑
+- 개별 AI 요약
 - 뉴스레터 기록
 - 업데이트 로그
 

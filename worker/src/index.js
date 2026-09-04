@@ -154,7 +154,7 @@ async function refreshWithD1(env) {
   const newDisclosures = await filterNewRows(env.DB, "disclosures", collectedDisclosures, disclosureKey);
   const newNews = await filterNewRows(env.DB, "news_articles", collectedNews, newsKey);
   const added = { disclosures: newDisclosures.length, news: newNews.length };
-  const analysis = added.disclosures || added.news ? await analyze(env, newDisclosures, newNews, diagnostics) : {};
+  const itemSummaries = added.disclosures || added.news ? await analyzeItems(env, newDisclosures, newNews, diagnostics) : [];
 
   const statements = [];
   for (const item of collectedDisclosures) {
@@ -169,9 +169,11 @@ async function refreshWithD1(env) {
       ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
       .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
   }
-  if (hasGeminiAnalysis(analysis)) {
-    statements.push(env.DB.prepare("INSERT INTO ai_briefings (id, briefing_date, created_at, scope, payload_json) VALUES (?, ?, ?, ?, ?)")
-      .bind(`ai:${now.toISOString()}`, kstDateKey(now), nowText, "manual_refresh_new_items", JSON.stringify({ analysis, disclosure_ids: newDisclosures.map(disclosureKey), news_ids: newNews.map(newsKey) })));
+  for (const item of itemSummaries.filter((row) => row.generated_by === "gemini")) {
+    statements.push(env.DB.prepare(`INSERT INTO item_ai_summaries (item_type, item_id, company, title, summary, key_points, caution, generated_by, model, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(item_type, item_id) DO UPDATE SET summary=excluded.summary, key_points=excluded.key_points, caution=excluded.caution, generated_by=excluded.generated_by, model=excluded.model, created_at=excluded.created_at`)
+      .bind(item.item_type, item.item_id, item.company, item.title, item.summary, item.key_points, item.caution, item.generated_by, item.model || "", nowText));
   }
   statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
@@ -187,14 +189,15 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
   const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
   const news = (newsRows.results || []).map(newsFromDb);
-  const analysis = await latestAnalysisFromD1(env);
+  const itemSummaries = await itemSummariesFromD1(env);
   return {
     ok: true,
     date: kstDateKey(new Date()),
     updated_at: updatedAt || (await latestRefreshTime(env)) || "",
     disclosures,
     news,
-    analysis,
+    analysis: {},
+    item_summaries: itemSummaries,
     diagnostics,
     summary: {
       disclosure_count: disclosures.length,
@@ -212,17 +215,28 @@ async function latestRefreshTime(env) {
   return seeded ? seeded.updated_at || "" : "";
 }
 
-async function latestAnalysisFromD1(env) {
-  const rows = await env.DB.prepare("SELECT payload_json FROM ai_briefings ORDER BY created_at DESC LIMIT 20").all();
-  const merged = {};
-  for (const row of rows.results || []) {
-    const payload = parseJson(row.payload_json, {});
-    const analysis = payload.analysis || payload.companies || payload;
-    for (const [company, item] of Object.entries(analysis || {})) {
-      if (!merged[company] && item && item.generated_by === "gemini") merged[company] = item;
+async function itemSummariesFromD1(env) {
+  try {
+    const rows = await env.DB.prepare("SELECT * FROM item_ai_summaries ORDER BY created_at DESC").all();
+    const result = {};
+    for (const row of rows.results || []) {
+      result[`${row.item_type}:${row.item_id}`] = {
+        item_type: row.item_type,
+        item_id: row.item_id,
+        company: row.company,
+        title: row.title,
+        summary: row.summary || "",
+        key_points: row.key_points || "",
+        caution: row.caution || "",
+        generated_by: row.generated_by,
+        model: row.model || "",
+        created_at: row.created_at,
+      };
     }
+    return result;
+  } catch (_) {
+    return {};
   }
-  return merged;
 }
 
 async function archiveIndexFromD1(env) {
@@ -251,6 +265,7 @@ async function cleanupOldData(env, now) {
     env.DB.prepare("DELETE FROM disclosures WHERE first_seen_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM news_articles WHERE first_seen_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM ai_briefings WHERE created_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM item_ai_summaries WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_items WHERE run_id IN (SELECT id FROM newsletter_runs WHERE created_at < ?)").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_runs WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM refresh_runs WHERE started_at < ?").bind(cutoff),
@@ -267,10 +282,6 @@ async function filterNewRows(db, table, rows, keyFn) {
     if (!existing) result.push(row);
   }
   return result;
-}
-
-function hasGeminiAnalysis(analysis) {
-  return Object.values(analysis || {}).some((item) => item && item.generated_by === "gemini");
 }
 
 function disclosureFromDb(row) {
@@ -503,6 +514,115 @@ async function analyze(env, disclosures, news, diagnostics) {
     diagnostics.push({ step: "gemini", status: "exception", reason: safeError(_) });
     return fallback;
   }
+}
+
+async function analyzeItems(env, disclosures, news, diagnostics) {
+  if (!disclosures.length && !news.length) return [];
+  if (!env.GEMINI_API_KEY) {
+    diagnostics.push({ step: "gemini_item", status: "missing_secret" });
+    return [];
+  }
+
+  const items = [
+    ...disclosures.map((item) => ({
+      item_type: "disclosure",
+      item_id: disclosureKey(item),
+      company: item.company,
+      category: item.category,
+      title: item.title,
+      date: item.date,
+      note: item.note || "",
+      source_text: [item.title, item.note].filter(Boolean).join(" / "),
+    })),
+    ...news.map((item) => ({
+      item_type: "news",
+      item_id: newsKey(item),
+      company: item.company,
+      category: item.category,
+      title: item.title,
+      published_at: item.published_at,
+      media: item.media || "",
+      source_text: [item.title, item.summary].filter(Boolean).join(" / "),
+    })),
+  ];
+
+  const prompt = {
+    role: "공시와 뉴스의 개별 항목 요약 담당자",
+    goal: "각 항목을 서로 섞지 않고, 해당 항목 자체에 있는 정보만 바탕으로 짧고 정확하게 요약합니다.",
+    strict_rules: [
+      "각 item_id별로 독립적으로 요약합니다.",
+      "다른 회사, 다른 기사, 다른 공시의 내용을 끌어오지 않습니다.",
+      "공시 항목에는 뉴스 내용을 연결하지 않습니다.",
+      "뉴스 항목에는 다른 공시나 회사 최근 동향을 연결하지 않습니다.",
+      "source_text에 없는 사실은 추정하지 않습니다.",
+      "정보가 부족하면 부족하다고 짧게 씁니다.",
+      "summary는 한 문장, key_points는 핵심 내용 1~2문장, caution은 확인할 점이 있을 때만 한 문장으로 씁니다.",
+    ],
+    output_format: {
+      items: [
+        {
+          item_type: "news 또는 disclosure",
+          item_id: "입력 item_id 그대로",
+          company: "회사명",
+          title: "제목",
+          summary: "해당 항목 자체 요약 1문장",
+          key_points: "해당 항목의 주요 내용 1~2문장",
+          caution: "확인할 점. 없으면 빈 문자열",
+        },
+      ],
+    },
+    input: { items },
+  };
+
+  try {
+    const models = unique([env.GEMINI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash-lite"].filter(Boolean));
+    for (const model of models) {
+      const body = {
+        contents: [{ role: "user", parts: [{ text: JSON.stringify(prompt) }] }],
+        generationConfig: { responseMimeType: "application/json" },
+      };
+      const response = await fetch(GEMINI_API_URL.replace("{model}", model), {
+        method: "POST",
+        headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        diagnostics.push({ step: "gemini_item", status: "http_error", model, code: response.status, reason: geminiErrorReason(await response.text()) });
+        continue;
+      }
+      const payload = await response.json();
+      const parsed = JSON.parse(extractJson(extractGeminiText(payload)));
+      const result = normalizeItemSummaries(parsed, items, model);
+      diagnostics.push({ step: "gemini_item", status: result.length ? "success" : "empty_result", model, item_count: result.length });
+      return result;
+    }
+  } catch (_) {
+    diagnostics.push({ step: "gemini_item", status: "exception", reason: safeError(_) });
+  }
+  return [];
+}
+
+function normalizeItemSummaries(parsed, inputItems, model) {
+  const allowed = new Map(inputItems.map((item) => [`${item.item_type}:${item.item_id}`, item]));
+  const rows = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.items) ? parsed.items : [];
+  const result = [];
+  for (const row of rows) {
+    const key = `${clean(row.item_type)}:${clean(row.item_id)}`;
+    const source = allowed.get(key);
+    if (!source) continue;
+    result.push({
+      item_type: source.item_type,
+      item_id: source.item_id,
+      company: source.company,
+      title: source.title,
+      summary: clean(row.summary),
+      key_points: clean(row.key_points),
+      caution: clean(row.caution),
+      generated_by: "gemini",
+      model,
+    });
+  }
+  return result;
 }
 
 function fallbackAnalysis(disclosures, news) {
@@ -896,6 +1016,7 @@ function renderPage() {
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
     const text = (value) => String(value ?? '').toLowerCase();
+    const norm = (value) => String(value ?? '').replace(/[^0-9A-Za-z가-힣]/g, '').toLowerCase();
 
     async function load() {
       const [latestRes, archiveRes] = await Promise.all([fetch('/api/latest'), fetch('/api/archive')]);
@@ -924,8 +1045,8 @@ function renderPage() {
 
     function filtered(rows) {
       return rows.filter((item) => {
-        const analysis = briefing.analysis?.[item.company] || {};
-        const haystack = text([item.company, item.category, item.title, item.summary, item.media, analysis.today_summary, analysis.news_summary, analysis.important_point].join(' '));
+        const ai = itemAi(item);
+        const haystack = text([item.company, item.category, item.title, item.summary, item.media, ai.summary, ai.key_points, ai.caution].join(' '));
         return (!state.company || item.company === state.company) && (!state.category || item.category === state.category) && (!state.search || haystack.includes(state.search));
       });
     }
@@ -933,24 +1054,28 @@ function renderPage() {
     function renderDisclosures() {
       const rows = filtered(briefing.disclosures || []);
       $('disclosures').innerHTML = rows.length ? rows.map((item) => {
-        const analysis = briefing.analysis?.[item.company] || {};
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '기타') + '</span>' + (item.important ? '<span class="badge important">💡 공시 우선 확인</span>' : '') + '</div><div class="date">' + esc(item.date) + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(analysis, 'disclosure') + '</article>';
+        const ai = itemAi(item);
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '기타') + '</span>' + (item.important ? '<span class="badge important">💡 공시 우선 확인</span>' : '') + '</div><div class="date">' + esc(item.date) + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '</article>';
       }).join('') : '<div class="empty">조건에 맞는 공시가 없습니다.</div>';
     }
 
     function renderNews() {
       const rows = filtered(briefing.news || []);
       $('news').innerHTML = rows.length ? rows.map((item) => {
-        const analysis = briefing.analysis?.[item.company] || {};
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(analysis, 'news') + '<p class="body"><strong>기사 주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
+        const ai = itemAi(item);
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '<p class="body"><strong>기사 주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
       }).join('') : '<div class="empty">조건에 맞는 뉴스가 없습니다.</div>';
     }
 
-    function renderAiBlock(analysis, type) {
-      if (!analysis || analysis.generated_by !== 'gemini') return '';
-      const first = type === 'news' ? (analysis.news_summary || analysis.today_summary || '') : (analysis.today_summary || '');
-      const second = analysis.important_point || '';
-      const content = [first, second].filter(Boolean).join('<br>');
+    function itemAi(item) {
+      const type = item.type === 'disclosure' ? 'disclosure' : 'news';
+      const id = type === 'disclosure' ? (item.receipt_no || (item.company + ':' + norm(item.title) + ':' + item.date)) : (item.company + ':' + norm(item.title));
+      return briefing.item_summaries?.[type + ':' + id] || {};
+    }
+
+    function renderAiBlock(ai) {
+      if (!ai || ai.generated_by !== 'gemini') return '';
+      const content = [ai.summary, ai.key_points, ai.caution].filter(Boolean).join('<br>');
       return content ? '<div class="point"><strong>AI 요약</strong><br>' + esc(content) + '</div>' : '';
     }
 

@@ -30,7 +30,8 @@
 
 - Gemini는 페이지 업데이트 때 항상 돌지 않습니다.
 - 새로 추가된 공시/뉴스가 있을 때만 해당 신규 항목을 요약합니다.
-- Gemini 결과는 D1의 `ai_briefings`에 저장합니다.
+- 개별 공시/기사 요약은 D1의 `item_ai_summaries`에 저장합니다.
+- 회사별/뉴스레터용 종합 브리핑은 D1의 `ai_briefings`에 저장합니다.
 - 뉴스레터 생성 시 이미 저장된 AI 요약이 있으면 재사용하고, 없으면 그때 추가 생성하는 방향입니다.
 - 페이지에서는 AI 요약이 저장되어 있을 때만 보여줍니다.
 
@@ -158,6 +159,7 @@ D1 DB 테이블 생성 파일입니다.
 - `disclosures`: 공시 누적 저장
 - `news_articles`: 뉴스 기사 누적 저장
 - `ai_briefings`: Gemini 요약 저장
+- `item_ai_summaries`: 개별 공시/기사별 Gemini 요약 저장
 - `newsletter_runs`: 뉴스레터 발송 단위 저장
 - `newsletter_items`: 뉴스레터에 포함된 공시/뉴스 저장
 - `refresh_runs`: 업데이트 실행 로그 저장
@@ -236,6 +238,7 @@ GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 - 30일 지난 공시 삭제
 - 30일 지난 뉴스 삭제
 - 30일 지난 AI 브리핑 삭제
+- 30일 지난 개별 AI 요약 삭제
 - 30일 지난 뉴스레터 기록 삭제
 - 30일 지난 업데이트 실행 로그 삭제
 
@@ -246,7 +249,7 @@ GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 - GitHub Actions 뉴스레터 발송 후 D1 `newsletter_runs`에 자동 저장 연결
 - `newsletter_items` 기준으로 뉴스레터 중복 발송 방지 완전 전환
 - Gemini 프롬프트 품질 개선
-- AI 요약을 회사 단위에서 기사/공시 단위로 더 세밀하게 저장하는 구조 검토
+- GitHub Actions 뉴스레터 생성 시 D1의 `item_ai_summaries` 재사용
 - Cloudflare Worker에서 메일 발송까지 처리할지, GitHub Actions 발송을 유지할지 결정
 
 ## 로컬 실행
