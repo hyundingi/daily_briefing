@@ -144,7 +144,6 @@ async function refreshWithD1(env) {
   const diagnostics = [];
   const collectedDisclosures = await collectDisclosures(env, diagnostics);
   const collectedNews = await collectNews(env, diagnostics);
-  const analysis = await analyze(env, collectedDisclosures, collectedNews, diagnostics);
   ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
 
   const now = new Date();
@@ -169,10 +168,6 @@ async function refreshWithD1(env) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
       .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
-  }
-  if (Object.keys(analysis).length) {
-    statements.push(env.DB.prepare("INSERT INTO ai_briefings (id, briefing_date, created_at, scope, payload_json) VALUES (?, ?, ?, ?, ?)")
-      .bind(`ai:${now.toISOString()}`, kstDateKey(now), nowText, "refresh_new_items", JSON.stringify({ analysis, disclosure_ids: collectedDisclosures.map(disclosureKey), news_ids: collectedNews.map(newsKey) })));
   }
   statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
