@@ -59,6 +59,7 @@ export default {
         return jsonResponse(await archiveBriefing(env, date));
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
+      if (request.method === "POST" && url.pathname === "/api/summarize-missing") return await summarizeMissing(request, env);
       return new Response("Not found", { status: 404 });
     } catch (error) {
       const status = error && error.status ? error.status : 500;
@@ -169,18 +170,81 @@ async function refreshWithD1(env) {
       ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
       .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
   }
-  for (const item of itemSummaries.filter((row) => row.generated_by === "gemini")) {
-    statements.push(env.DB.prepare(`INSERT INTO item_ai_summaries (item_type, item_id, company, title, summary, key_points, caution, generated_by, model, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(item_type, item_id) DO UPDATE SET summary=excluded.summary, key_points=excluded.key_points, caution=excluded.caution, generated_by=excluded.generated_by, model=excluded.model, created_at=excluded.created_at`)
-      .bind(item.item_type, item.item_id, item.company, item.title, item.summary, item.key_points, item.caution, item.generated_by, item.model || "", nowText));
-  }
+  statements.push(...itemSummaryStatements(env, itemSummaries, nowText));
   statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
   if (statements.length) await env.DB.batch(statements);
 
   const briefing = await latestBriefingFromD1(env, nowText, diagnostics);
   return jsonResponse({ ok: true, briefing, added });
+}
+
+async function summarizeMissing(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const locked = await env.BRIEFING_KV.get("lock:summarize");
+  if (locked) return jsonResponse({ ok: false, locked: true, message: "AI 요약 생성이 이미 진행 중입니다." }, 409);
+
+  await env.BRIEFING_KV.put("lock:summarize", JSON.stringify({ started_at: new Date().toISOString() }), { expirationTtl: 300 });
+  try {
+    const url = new URL(request.url);
+    const requestedLimit = Number(url.searchParams.get("limit") || "10");
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 10, 1), 15);
+    const diagnostics = [];
+    const { disclosures, news } = await missingSummaryItems(env, limit);
+    const attempted = disclosures.length + news.length;
+    if (!attempted) {
+      return jsonResponse({ ok: true, attempted: 0, saved: 0, remaining: 0, diagnostics });
+    }
+
+    const summaries = await analyzeItems(env, disclosures, news, diagnostics);
+    const nowText = kstTimestamp(new Date());
+    const statements = itemSummaryStatements(env, summaries, nowText);
+    if (statements.length) await env.DB.batch(statements);
+    const remaining = await countMissingItemSummaries(env);
+    return jsonResponse({ ok: true, attempted, saved: statements.length, remaining, diagnostics });
+  } finally {
+    await env.BRIEFING_KV.delete("lock:summarize");
+  }
+}
+
+async function missingSummaryItems(env, limit) {
+  const rows = await env.DB.prepare(`SELECT * FROM (
+      SELECT 'disclosure' AS item_type, id, company, category, title, COALESCE(note, '') AS body, link, NULL AS media, NULL AS published_at, receipt_no, disclosure_date, is_revision, score, important, COALESCE(first_seen_at, disclosure_date) AS sort_at
+      FROM disclosures d
+      WHERE NOT EXISTS (SELECT 1 FROM item_ai_summaries s WHERE s.item_type = 'disclosure' AND s.item_id = d.id)
+      UNION ALL
+      SELECT 'news' AS item_type, id, company, category, title, COALESCE(summary, '') AS body, link, media, published_at, NULL AS receipt_no, NULL AS disclosure_date, 0 AS is_revision, 0 AS score, important, COALESCE(published_at, first_seen_at) AS sort_at
+      FROM news_articles n
+      WHERE NOT EXISTS (SELECT 1 FROM item_ai_summaries s WHERE s.item_type = 'news' AND s.item_id = n.id)
+    )
+    ORDER BY sort_at DESC, company ASC, title ASC
+    LIMIT ?`).bind(limit).all();
+
+  const disclosures = [];
+  const news = [];
+  for (const row of rows.results || []) {
+    if (row.item_type === "disclosure") {
+      disclosures.push({ type: "disclosure", company: row.company, category: row.category, title: row.title, receipt_no: row.receipt_no, date: row.disclosure_date, is_revision: !!row.is_revision, note: row.body, link: row.link, score: row.score || 0, important: !!row.important });
+    } else {
+      news.push({ type: "news", company: row.company, category: row.category, title: row.title, summary: row.body, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important });
+    }
+  }
+  return { disclosures, news };
+}
+
+async function countMissingItemSummaries(env) {
+  const row = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM disclosures d WHERE NOT EXISTS (SELECT 1 FROM item_ai_summaries s WHERE s.item_type = 'disclosure' AND s.item_id = d.id)) +
+      (SELECT COUNT(*) FROM news_articles n WHERE NOT EXISTS (SELECT 1 FROM item_ai_summaries s WHERE s.item_type = 'news' AND s.item_id = n.id)) AS count`).first();
+  return row ? Number(row.count || 0) : 0;
+}
+
+function itemSummaryStatements(env, summaries, nowText) {
+  return summaries.filter((row) => row.generated_by === "gemini").map((item) => env.DB.prepare(`INSERT INTO item_ai_summaries (item_type, item_id, company, title, summary, key_points, caution, generated_by, model, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(item_type, item_id) DO UPDATE SET summary=excluded.summary, key_points=excluded.key_points, caution=excluded.caution, generated_by=excluded.generated_by, model=excluded.model, created_at=excluded.created_at`)
+    .bind(item.item_type, item.item_id, item.company, item.title, item.summary, item.key_points, item.caution, item.generated_by, item.model || "", nowText));
 }
 
 async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
@@ -985,6 +1049,7 @@ function renderPage() {
       </div>
       <div class="actions">
         <span id="status" class="sub">불러오는 중...</span>
+        <button id="summarize" type="button">AI 요약 채우기</button>
         <button id="refresh" class="primary" type="button">업데이트</button>
       </div>
     </header>
@@ -1113,6 +1178,37 @@ function renderPage() {
     $('company').onchange = (event) => { state.company = event.target.value; render(); };
     $('category').onchange = (event) => { state.category = event.target.value; render(); };
     $('search').oninput = (event) => { state.search = event.target.value.trim().toLowerCase(); render(); };
+    $('summarize').onclick = async () => {
+      const button = $('summarize');
+      button.disabled = true;
+      button.textContent = '요약 생성 중...';
+      $('status').textContent = '요약 없는 최신 항목 10건을 AI가 정리하는 중입니다.';
+      try {
+        const password = prompt('업데이트 비밀번호를 입력해주세요.') || '';
+        if (!password) throw new Error('업데이트 비밀번호가 입력되지 않았습니다.');
+        const response = await fetch('/api/summarize-missing?limit=10', { method:'POST', headers:{ 'x-update-password': password } });
+        if (response.status === 409) {
+          alert('AI 요약 생성이 이미 진행 중입니다. 잠시 후 다시 확인해주세요.');
+        } else if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          alert(errorBody.error || 'AI 요약 생성에 실패했습니다.');
+        } else {
+          const data = await response.json();
+          await load();
+          if ((data.attempted || 0) === 0) {
+            alert('AI 요약을 채울 항목이 없습니다.');
+          } else {
+            alert('AI 요약 완료: ' + (data.saved || 0) + '건 저장, 남은 항목 ' + (data.remaining || 0) + '건');
+          }
+        }
+      } catch (error) {
+        alert(error.message || 'AI 요약 생성에 실패했습니다.');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'AI 요약 채우기';
+        render();
+      }
+    };
     $('refresh').onclick = async () => {
       const button = $('refresh');
       button.disabled = true;

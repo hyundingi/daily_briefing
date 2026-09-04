@@ -7,6 +7,7 @@ Cloudflare Worker + D1로 운영되는 경쟁사 브리핑 웹앱입니다.
 - `/`: 브리핑 웹페이지 표시
 - `/api/latest`: 최근 30일 공시/뉴스와 최신 AI 요약 조회
 - `/api/refresh`: 새 공시/뉴스 수집, D1 저장, 신규 항목이 있을 때만 Gemini 요약 생성
+- `/api/summarize-missing`: 기존 저장 항목 중 AI 요약이 없는 최신 항목을 10건씩 보강
 - `/api/archive`: 발송된 뉴스레터 아카이브 목록 조회
 - `/api/archive/YYYY-MM-DD`: 해당 날짜 뉴스레터 HTML 전문 조회
 
@@ -66,7 +67,7 @@ wrangler secret put UPDATE_PASSWORD
 wrangler secret put GEMINI_MODEL
 ```
 
-`UPDATE_PASSWORD`는 웹페이지의 업데이트 버튼 보호용입니다.
+`UPDATE_PASSWORD`는 웹페이지의 업데이트 버튼과 AI 요약 채우기 버튼 보호용입니다.
 
 ## D1 마이그레이션
 
@@ -94,6 +95,17 @@ pnpm deploy
 7. 페이지는 최신 D1 데이터를 다시 불러옴
 
 새 항목이 없으면 Gemini를 호출하지 않습니다.
+
+## AI 요약 채우기 동작
+
+1. 사용자가 웹페이지에서 AI 요약 채우기 버튼 클릭
+2. `UPDATE_PASSWORD` 입력
+3. D1에 저장된 공시/뉴스 중 아직 `item_ai_summaries`가 없는 최신 항목 10건 조회
+4. Gemini가 각 공시/기사 자체 내용만 기준으로 개별 요약 생성
+5. 성공한 요약만 `item_ai_summaries`에 저장
+6. 페이지는 최신 D1 데이터를 다시 불러옴
+
+요약할 항목이 없으면 Gemini를 호출하지 않습니다. 무료 한도와 응답 속도를 위해 한 번에 처리하는 기본 수량은 10건입니다.
 
 ## 아카이브
 
