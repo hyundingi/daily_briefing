@@ -8,6 +8,10 @@ Cloudflare Worker + D1로 운영되는 경쟁사 브리핑 웹앱입니다.
 - `/api/latest`: 최근 30일 공시/뉴스와 최신 AI 요약 조회
 - `/api/refresh`: 새 공시/뉴스 수집, D1 저장, 신규 항목이 있을 때만 Gemini 요약 생성
 - `/api/summarize-missing`: 기존 저장 항목 중 AI 요약이 없는 최신 항목을 10건씩 보강
+- `/api/newsletter/generate`: 마지막 발송 이후 신규 항목으로 뉴스레터 HTML 생성
+- `/api/newsletter/latest-unsent`: 아직 발송되지 않은 뉴스레터 HTML 조회
+- `/api/newsletter/mark-sent`: 메일 발송 성공 후 발송 완료 기록
+- `/api/newsletter/import-archive`: 기존 HTML 아카이브 수동 적재
 - `/api/archive`: 발송된 뉴스레터 아카이브 목록 조회
 - `/api/archive/YYYY-MM-DD`: 해당 날짜 뉴스레터 HTML 전문 조회
 
@@ -69,6 +73,7 @@ wrangler secret put GEMINI_MODEL
 ```
 
 `UPDATE_PASSWORD`는 웹페이지의 업데이트 버튼과 AI 요약 채우기 버튼 보호용입니다.
+GitHub Actions가 뉴스레터 생성/조회/발송 완료 기록 API를 호출할 때도 같은 값을 사용합니다.
 
 ## D1 마이그레이션
 
@@ -110,6 +115,19 @@ pnpm deploy
 요약할 항목이 없으면 Gemini를 호출하지 않습니다. 무료 한도와 응답 속도를 위해 한 번에 처리하는 기본 수량은 10건입니다.
 
 공시 원문을 가져오지 못한 항목은 제목만으로 요약하지 않습니다. 이 경우 Gemini 요약 저장 대상에서 제외됩니다.
+
+## 뉴스레터 생성/발송 동작
+
+1. GitHub Actions가 평일 오전 8시 10분, 8시 25분 KST에 실행
+2. `src.worker_newsletter_sender`가 Worker의 `/api/refresh` 호출
+3. Worker가 D1에 새 공시/뉴스를 누적 저장
+4. `src.worker_newsletter_sender`가 `/api/newsletter/generate` 호출
+5. Worker가 마지막 발송 시각 이후 새 항목만 골라 뉴스레터 HTML 생성
+6. 생성된 HTML은 D1 `newsletter_runs`에 `sent_at = NULL` 상태로 저장
+7. GitHub Actions가 HTML을 SMTP로 발송
+8. 발송 성공 시 `/api/newsletter/mark-sent`를 호출해 `sent_at` 기록
+
+새 항목이 없으면 Worker는 뉴스레터를 생성하지 않고, GitHub Actions도 메일을 보내지 않습니다.
 
 ## 아카이브
 

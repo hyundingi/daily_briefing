@@ -2,7 +2,7 @@
 
 경쟁사 10개사의 DART 공시와 최신 뉴스를 수집해 웹페이지와 뉴스레터로 확인하는 프로젝트입니다.
 
-현재 운영 중심은 Cloudflare Worker + D1입니다. GitHub Actions/Python 코드는 아침 뉴스레터 발송 자동화와 기존 아카이브 생성 로직을 위해 유지합니다.
+현재 운영 중심은 Cloudflare Worker + D1입니다. Worker가 웹페이지, 데이터 수집, 뉴스레터 HTML 생성을 담당하고, GitHub Actions는 아침 메일 발송만 담당합니다.
 
 ## 현재 운영 구조
 
@@ -21,10 +21,11 @@
 ### 2. 뉴스레터
 
 - GitHub Actions가 평일 아침에 실행합니다.
-- 기본 예약 시간은 한국시간 기준 평일 오전 8시 10분입니다.
-- 새 공시 또는 새 뉴스가 있을 때만 메일을 발송하는 방향입니다.
-- 뉴스레터에는 이미 발송된 공시/뉴스가 다시 들어가지 않아야 합니다.
-- 발송 성공 후 뉴스레터 HTML 전문은 D1의 `newsletter_runs`에 저장하는 구조로 전환 중입니다.
+- 예약 시간은 한국시간 기준 평일 오전 8시 10분이며, 지연/실패 보완용으로 8시 25분에도 한 번 더 실행합니다.
+- Worker가 마지막 발송 시각 이후 새로 들어온 공시/뉴스를 기준으로 뉴스레터 HTML을 생성합니다.
+- GitHub Actions는 Worker에서 생성된 미발송 HTML을 받아 SMTP 메일만 발송합니다.
+- 발송 성공 후 GitHub Actions가 Worker에 발송 완료를 알려 D1의 `newsletter_runs.sent_at`을 기록합니다.
+- 새 공시 또는 새 뉴스가 없으면 뉴스레터를 생성하거나 발송하지 않습니다.
 - 아카이브 탭은 “날짜별 전체 데이터”가 아니라 “발송된 뉴스레터 보관함”으로 사용합니다.
 
 ### 3. AI 요약
@@ -69,12 +70,10 @@ GitHub Actions 자동 실행 파일입니다.
 
 - 평일 아침 뉴스레터 자동 실행
 - Python 의존성 설치
-- 공시/뉴스 수집
-- 뉴스레터 HTML 생성
 - 메일 발송
-- GitHub Pages용 `public/` 결과물 커밋/배포
+- 발송 성공 시 Worker에 발송 완료 기록
 
-앞으로는 메일 발송 성공 후 Cloudflare Worker API를 호출해 D1의 `newsletter_runs`, `newsletter_items`에도 발송 기록을 저장하도록 연결할 예정입니다.
+공시/뉴스 수집과 뉴스레터 HTML 생성은 Worker가 담당합니다.
 
 ### `company_profiles/`
 
@@ -113,6 +112,8 @@ Python 기반 뉴스레터 생성 파이프라인입니다.
 - `newsletter_renderer.py`: 메일용 HTML 뉴스레터 생성
 - `page_renderer.py`: 기존 GitHub Pages HTML 생성
 - `email_sender.py`: SMTP 메일 발송
+- `worker_newsletter_sender.py`: Worker가 생성한 미발송 뉴스레터 HTML을 가져와 메일 발송
+- `archive_sql_exporter.py`: 기존 `public/archive` HTML을 D1 아카이브로 옮기기 위한 유지보수 도구
 - `company_profiles.py`: 회사 프로필 로딩
 
 ### `state/`
@@ -139,6 +140,7 @@ Cloudflare Worker 웹앱입니다.
 - D1에 최근 30일 데이터를 누적 저장합니다.
 - 요약이 없는 기존 항목을 최신순으로 10건씩 Gemini 요약으로 보강합니다.
 - 공시 원문 추출 텍스트는 D1의 `disclosure_documents`에 캐시합니다.
+- 뉴스레터 HTML을 생성하고 미발송/발송완료 상태를 관리합니다.
 - 발송된 뉴스레터 아카이브를 보여줍니다.
 
 자세한 설정은 `worker/README.md`를 참고합니다.
@@ -155,6 +157,10 @@ Cloudflare Worker의 핵심 코드입니다.
 - `/api/archive/YYYY-MM-DD`: 해당 날짜 뉴스레터 전문 조회
 - `/api/refresh`: 새 공시/뉴스 수집 및 D1 저장
 - `/api/summarize-missing`: 기존 항목 중 AI 요약이 없는 최신 항목 일부를 요약
+- `/api/newsletter/generate`: 마지막 발송 이후 신규 항목으로 뉴스레터 HTML 생성
+- `/api/newsletter/latest-unsent`: 아직 발송되지 않은 뉴스레터 HTML 조회
+- `/api/newsletter/mark-sent`: 메일 발송 성공 후 발송 완료 기록
+- `/api/newsletter/import-archive`: 기존 HTML 아카이브를 D1에 수동 적재
 
 ### `worker/migrations/0001_init.sql`
 
@@ -175,7 +181,7 @@ D1 DB 테이블 생성 파일입니다.
 
 Python 뉴스레터 파이프라인의 실행 진입점입니다.
 
-GitHub Actions에서 이 파일을 실행해 공시/뉴스 수집, 브리핑 생성, 메일 발송, 아카이브 생성을 진행합니다.
+기존 Python 뉴스레터 파이프라인의 실행 진입점입니다. 현재 운영 뉴스레터 발송은 `src/worker_newsletter_sender.py`를 사용합니다.
 
 ### `requirements.txt`
 
@@ -219,10 +225,7 @@ Cloudflare Worker에 아래 secrets가 필요합니다.
 
 GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 
-- `DART_API_KEY`
-- `NAVER_API_HUB_CLIENT_ID`
-- `NAVER_API_HUB_CLIENT_SECRET`
-- `GEMINI_API_KEY`
+- `WORKER_UPDATE_PASSWORD`: Worker의 `UPDATE_PASSWORD`와 같은 값. 이미 `UPDATE_PASSWORD`라는 이름으로 GitHub Secret을 넣었다면 그것도 fallback으로 사용합니다.
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USERNAME`
@@ -233,10 +236,7 @@ GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 
 선택값:
 
-- `GEMINI_MODEL`
-- `USE_GEMINI`
-- `SEND_EMAIL`
-- `EMAIL_REQUIRED`
+- Repository variable `WORKER_BASE_URL`: 없으면 `https://competitor-newsletter.hyundingi.workers.dev` 사용
 
 ## 데이터 보관 정책
 
@@ -253,11 +253,9 @@ GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 
 ## 현재 남아 있는 TODO
 
-- GitHub Actions 뉴스레터 발송 후 D1 `newsletter_runs`에 자동 저장 연결
-- `newsletter_items` 기준으로 뉴스레터 중복 발송 방지 완전 전환
-- Gemini 프롬프트 품질 개선
-- GitHub Actions 뉴스레터 생성 시 D1의 `item_ai_summaries` 재사용
-- Cloudflare Worker에서 메일 발송까지 처리할지, GitHub Actions 발송을 유지할지 결정
+- Worker 뉴스레터 HTML 디자인 고도화
+- 뉴스레터용 중요도 선별 프롬프트/규칙 개선
+- GitHub Actions 실제 예약 실행 로그 모니터링
 
 ## 로컬 실행
 

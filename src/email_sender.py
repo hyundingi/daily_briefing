@@ -35,7 +35,7 @@ def email_configured() -> bool:
     )
 
 
-def send_newsletter(html_path: Path, subject: str) -> bool:
+def send_newsletter_html(html_body: str, subject: str) -> bool:
     if not email_configured():
         if os.getenv("EMAIL_REQUIRED", "").strip().lower() in {"1", "true", "yes", "y"}:
             raise RuntimeError("메일 발송 환경변수가 부족합니다.")
@@ -50,12 +50,11 @@ def send_newsletter(html_path: Path, subject: str) -> bool:
     recipients = split_addresses(required("MAIL_TO"))
     use_tls = os.getenv("SMTP_USE_TLS", "true").strip().lower() not in {"0", "false", "no", "n"}
 
-    html_body = html_path.read_text(encoding="utf-8")
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = mail_from
     message["To"] = ", ".join(recipients)
-    message.set_content("HTML 뉴스레터를 볼 수 없는 환경입니다. 첨부 또는 GitHub Pages 아카이브를 확인해 주세요.")
+    message.set_content("HTML 뉴스레터를 볼 수 없는 환경입니다. 브리핑 웹페이지의 아카이브를 확인해 주세요.")
     message.add_alternative(html_body, subtype="html")
 
     with smtplib.SMTP(host, port, timeout=30) as smtp:
@@ -65,3 +64,8 @@ def send_newsletter(html_path: Path, subject: str) -> bool:
         smtp.send_message(message)
     print(f"[메일발송] 완료: {len(recipients)}명")
     return True
+
+
+def send_newsletter(html_path: Path, subject: str) -> bool:
+    html_body = html_path.read_text(encoding="utf-8")
+    return send_newsletter_html(html_body, subject)

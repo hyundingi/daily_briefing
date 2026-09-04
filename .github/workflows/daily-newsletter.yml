@@ -6,17 +6,16 @@ on:
     branches:
       - master
   schedule:
-    # 08:10 KST, Monday-Friday. GitHub Actions cron uses UTC.
+    # 08:10 and 08:25 KST, Monday-Friday. GitHub Actions cron uses UTC.
     - cron: "10 23 * * 0-4"
+    - cron: "25 23 * * 0-4"
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: daily-newsletter
+  cancel-in-progress: false
 
 jobs:
   validate-push:
@@ -40,14 +39,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Build daily newsletter
+      - name: Generate newsletter in Worker and send email
         env:
-          DART_API_KEY: ${{ secrets.DART_API_KEY }}
-          NAVER_API_HUB_CLIENT_ID: ${{ secrets.NAVER_API_HUB_CLIENT_ID }}
-          NAVER_API_HUB_CLIENT_SECRET: ${{ secrets.NAVER_API_HUB_CLIENT_SECRET }}
-          USE_GEMINI: "true"
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          WORKER_BASE_URL: ${{ vars.WORKER_BASE_URL || 'https://competitor-newsletter.hyundingi.workers.dev' }}
+          WORKER_UPDATE_PASSWORD: ${{ secrets.WORKER_UPDATE_PASSWORD || secrets.UPDATE_PASSWORD }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -55,19 +50,6 @@ jobs:
           SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
-          EMAIL_REQUIRED: "false"
+          EMAIL_REQUIRED: "true"
           SEND_EMAIL: "true"
-        run: python daily_briefing.py
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-      - uses: actions/deploy-pages@v4
-      - name: Commit updated archive and state
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/newsletter_state.json state/archive_index.json state/issue_history.json state/daily_briefings state/company_timelines public
-          git diff --staged --quiet || git commit -m "Update newsletter archive"
-          git push || true
+        run: python -m src.worker_newsletter_sender

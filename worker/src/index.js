@@ -64,6 +64,10 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
       if (request.method === "POST" && url.pathname === "/api/summarize-missing") return await summarizeMissing(request, env);
+      if (request.method === "POST" && url.pathname === "/api/newsletter/import-archive") return await importNewsletterArchive(request, env);
+      if (request.method === "POST" && url.pathname === "/api/newsletter/generate") return await generateNewsletter(request, env);
+      if (request.method === "GET" && url.pathname === "/api/newsletter/latest-unsent") return await latestUnsentNewsletter(request, env);
+      if (request.method === "POST" && url.pathname === "/api/newsletter/mark-sent") return await markNewsletterSent(request, env);
       return new Response("Not found", { status: 404 });
     } catch (error) {
       const status = error && error.status ? error.status : 500;
@@ -250,6 +254,194 @@ function itemSummaryStatements(env, summaries, nowText) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(item_type, item_id) DO UPDATE SET summary=excluded.summary, key_points=excluded.key_points, caution=excluded.caution, generated_by=excluded.generated_by, model=excluded.model, created_at=excluded.created_at`)
     .bind(item.item_type, item.item_id, item.company, item.title, item.summary, item.key_points, item.caution, item.generated_by, item.model || "", nowText));
+}
+
+async function importNewsletterArchive(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const body = await request.json().catch(() => ({}));
+  const date = clean(body.date);
+  const html = String(body.html || "");
+  if (!date || !html) return jsonResponse({ ok: false, error: "date와 html이 필요합니다." }, 400);
+  const subject = clean(body.subject) || `${date} 경쟁사 모닝 브리핑`;
+  const sentAt = clean(body.sent_at) || `${date} 08:10:00`;
+  const summary = {
+    disclosure_count: Number(body.disclosure_count || 0),
+    news_count: Number(body.news_count || 0),
+    imported: true,
+  };
+  const id = `archive:${date}`;
+  await env.DB.prepare(`INSERT INTO newsletter_runs (id, newsletter_date, created_at, sent_at, subject, html, summary_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET sent_at=excluded.sent_at, subject=excluded.subject, html=excluded.html, summary_json=excluded.summary_json`)
+    .bind(id, date, sentAt, sentAt, subject, html, JSON.stringify(summary)).run();
+  return jsonResponse({ ok: true, id, date, sent_at: sentAt, subject });
+}
+
+async function generateNewsletter(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+
+  const existing = await env.DB.prepare("SELECT * FROM newsletter_runs WHERE sent_at IS NULL ORDER BY created_at DESC LIMIT 1").first();
+  if (existing) return jsonResponse(newsletterRunPayload(existing, { reused: true }));
+
+  const createdAt = kstTimestamp(new Date());
+  const date = kstDateKey(new Date());
+  const since = await latestSentAt(env);
+  const disclosures = await newsletterDisclosureItems(env, since);
+  const news = await newsletterNewsItems(env, since, disclosures.length);
+  if (!disclosures.length && !news.length) {
+    return jsonResponse({ ok: true, created: false, reason: "no_new_items", since, disclosure_count: 0, news_count: 0 });
+  }
+
+  const subject = makeNewsletterSubject(date, disclosures.length, news.length);
+  const html = renderNewsletterHtml({ date, createdAt, since, disclosures, news });
+  const id = `newsletter:${date}:${Date.now()}`;
+  const summary = { since, disclosure_count: disclosures.length, news_count: news.length, generated_by: "worker" };
+  const statements = [
+    env.DB.prepare("INSERT INTO newsletter_runs (id, newsletter_date, created_at, sent_at, subject, html, summary_json) VALUES (?, ?, ?, NULL, ?, ?, ?)")
+      .bind(id, date, createdAt, subject, html, JSON.stringify(summary)),
+  ];
+  for (const item of [...disclosures, ...news]) {
+    statements.push(env.DB.prepare("INSERT OR IGNORE INTO newsletter_items (run_id, item_type, item_id, company, title) VALUES (?, ?, ?, ?, ?)")
+      .bind(id, item.type, item.id, item.company, item.title));
+  }
+  await env.DB.batch(statements);
+  return jsonResponse({ ok: true, created: true, id, date, subject, html, disclosure_count: disclosures.length, news_count: news.length, since });
+}
+
+async function latestUnsentNewsletter(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const run = await env.DB.prepare("SELECT * FROM newsletter_runs WHERE sent_at IS NULL ORDER BY created_at DESC LIMIT 1").first();
+  if (!run) return jsonResponse({ ok: true, found: false });
+  return jsonResponse(newsletterRunPayload(run, { found: true }));
+}
+
+async function markNewsletterSent(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const body = await request.json().catch(() => ({}));
+  const id = clean(body.id);
+  if (!id) return jsonResponse({ ok: false, error: "id가 필요합니다." }, 400);
+  const sentAt = clean(body.sent_at) || kstTimestamp(new Date());
+  await env.DB.prepare("UPDATE newsletter_runs SET sent_at = ? WHERE id = ?").bind(sentAt, id).run();
+  return jsonResponse({ ok: true, id, sent_at: sentAt });
+}
+
+async function latestSentAt(env) {
+  const row = await env.DB.prepare("SELECT MAX(sent_at) AS sent_at FROM newsletter_runs WHERE sent_at IS NOT NULL").first();
+  return row && row.sent_at ? row.sent_at : "1970-01-01 00:00:00";
+}
+
+async function newsletterDisclosureItems(env, since) {
+  const rows = await env.DB.prepare(`SELECT d.*, s.summary AS ai_summary, s.key_points, s.caution
+    FROM disclosures d
+    LEFT JOIN item_ai_summaries s ON s.item_type = 'disclosure' AND s.item_id = d.id
+    WHERE d.first_seen_at > ?
+    ORDER BY d.important DESC, d.disclosure_date DESC, d.company ASC
+    LIMIT 20`).bind(since).all();
+  return (rows.results || []).map((row) => ({
+    type: "disclosure",
+    id: row.id,
+    company: row.company,
+    category: row.category || "공시",
+    title: row.title,
+    link: row.link,
+    date: row.disclosure_date,
+    important: !!row.important,
+    ai_summary: row.ai_summary || "",
+    key_points: row.key_points || "",
+    caution: row.caution || "",
+  }));
+}
+
+async function newsletterNewsItems(env, since, disclosureCount) {
+  const rows = await env.DB.prepare(`SELECT n.*, s.summary AS ai_summary, s.key_points, s.caution
+    FROM news_articles n
+    LEFT JOIN item_ai_summaries s ON s.item_type = 'news' AND s.item_id = n.id
+    WHERE n.first_seen_at > ?
+    ORDER BY n.important DESC, n.published_at DESC, n.company ASC
+    LIMIT ?`).bind(since, disclosureCount ? 12 : 16).all();
+  const all = (rows.results || []).map((row) => ({
+    type: "news",
+    id: row.id,
+    company: row.company,
+    category: row.category || "뉴스",
+    title: row.title,
+    link: row.link,
+    date: row.published_at,
+    media: row.media || "",
+    important: !!row.important,
+    ai_summary: row.ai_summary || "",
+    key_points: row.key_points || "",
+    caution: row.caution || "",
+    excerpt: row.summary || "",
+  }));
+  const important = all.filter((item) => item.important);
+  return important.length ? important : all.slice(0, Math.min(5, all.length));
+}
+
+function newsletterRunPayload(run, extra = {}) {
+  const summary = parseJson(run.summary_json, {});
+  return { ok: true, ...extra, id: run.id, date: run.newsletter_date, created_at: run.created_at, sent_at: run.sent_at || "", subject: run.subject || "", html: run.html || "", summary, disclosure_count: summary.disclosure_count || 0, news_count: summary.news_count || 0 };
+}
+
+function makeNewsletterSubject(date, disclosureCount, newsCount) {
+  const parts = [];
+  if (disclosureCount) parts.push(`신규 공시 ${disclosureCount}건`);
+  if (newsCount) parts.push(`최신 뉴스 ${newsCount}건`);
+  return `[경쟁사 브리핑] ${date.replaceAll("-", ".")} ${parts.join(" · ")}`;
+}
+
+function renderNewsletterHtml({ date, createdAt, since, disclosures, news }) {
+  const companySections = groupByCompany([...disclosures, ...news]).map(([company, items]) => renderNewsletterCompany(company, items)).join("");
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(makeNewsletterSubject(date, disclosures.length, news.length))}</title></head>
+<body style="margin:0;background:#f6f1e9;color:#26221d;font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
+  <div style="max-width:760px;margin:0 auto;padding:28px 18px 36px;">
+    <div style="background:#fffaf3;border-radius:26px;padding:28px 30px;box-shadow:0 10px 28px rgba(62,49,32,.08);">
+      <p style="margin:0 0 8px;color:#8b7a66;font-size:14px;font-weight:700;">${escapeHtml(createdAt)} 생성 · 기준 ${escapeHtml(since)}</p>
+      <h1 style="margin:0;color:#241f1a;font-size:30px;letter-spacing:-.03em;">${escapeHtml(date.replaceAll("-", "."))} 경쟁사 브리핑</h1>
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+        <span style="display:inline-block;padding:9px 13px;border-radius:999px;background:#f0e8dc;color:#5f5142;font-weight:800;">신규 공시 ${disclosures.length}건</span>
+        <span style="display:inline-block;padding:9px 13px;border-radius:999px;background:#f0e8dc;color:#5f5142;font-weight:800;">최신 뉴스 ${news.length}건</span>
+      </div>
+    </div>
+    ${companySections || '<div style="margin-top:18px;background:#fffaf3;border-radius:22px;padding:22px;color:#8b7a66;">새로 발송할 항목이 없습니다.</div>'}
+  </div>
+</body></html>`;
+}
+
+function renderNewsletterCompany(company, items) {
+  const disclosures = items.filter((item) => item.type === "disclosure");
+  const news = items.filter((item) => item.type === "news");
+  return `<section style="margin-top:18px;background:#fffaf3;border-radius:24px;padding:24px 26px;box-shadow:0 8px 22px rgba(62,49,32,.06);">
+    <h2 style="margin:0 0 16px;font-size:22px;color:${escapeHtml(COMPANY_COLORS[company] || "#42546a")};">${escapeHtml(company)}</h2>
+    ${disclosures.length ? '<h3 style="margin:18px 0 10px;font-size:16px;color:#5f5142;">공시</h3>' + disclosures.map(renderNewsletterItem).join("") : ""}
+    ${news.length ? '<h3 style="margin:18px 0 10px;font-size:16px;color:#5f5142;">최신 뉴스</h3>' + news.map(renderNewsletterItem).join("") : ""}
+  </section>`;
+}
+
+function renderNewsletterItem(item) {
+  const ai = [item.ai_summary, item.key_points, item.caution].flatMap((value) => String(value || "").replace(/<br\s*\/?>/gi, "\n").split(/\n+/)).map(clean).filter(Boolean).slice(0, 3);
+  const fallback = item.type === "news" ? clean(item.excerpt) : "";
+  const body = ai.length ? ai.join("<br>") : fallback;
+  return `<article style="border-top:1px solid #eee3d4;padding:14px 0 12px;">
+    <div style="margin-bottom:8px;"><span style="display:inline-block;padding:5px 9px;border-radius:999px;background:#f3efe7;color:#665f57;font-size:12px;font-weight:800;">${escapeHtml(item.category)}</span>${item.important ? ' <span style="display:inline-block;padding:5px 9px;border-radius:999px;background:#fff3d5;color:#8a5b00;font-size:12px;font-weight:800;">중요</span>' : ""}</div>
+    <a href="${escapeHtml(item.link)}" style="color:#241f1a;text-decoration:none;font-size:17px;font-weight:800;line-height:1.45;">${escapeHtml(item.title)}</a>
+    ${body ? `<p style="margin:10px 0 0;color:#51483e;font-size:14px;line-height:1.75;">${escapeHtml(body).replaceAll("&lt;br&gt;", "<br>")}</p>` : ""}
+    <p style="margin:8px 0 0;color:#9a8c7a;font-size:12px;">${escapeHtml(item.date || "")}</p>
+  </article>`;
+}
+
+function groupByCompany(items) {
+  const map = new Map();
+  for (const company of TARGET_COMPANIES.map((item) => item.name)) map.set(company, []);
+  for (const item of items) {
+    if (!map.has(item.company)) map.set(item.company, []);
+    map.get(item.company).push(item);
+  }
+  return [...map.entries()].filter(([, rows]) => rows.length);
 }
 
 async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
