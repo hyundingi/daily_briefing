@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from src import briefing_analyzer, dart_collector, email_sender, news_collector, newsletter_renderer, page_renderer
+from src import briefing_analyzer, dart_collector, email_sender, news_collector, newsletter_renderer
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -81,7 +81,6 @@ def main() -> None:
     news_collector.collect_news()
     briefing_analyzer.analyze_today()
     html_path = newsletter_renderer.render_html()
-    page_renderer.render_pages(html_path)
 
     receipts = unsent_disclosure_receipts()
     news_links = unsent_news_links()

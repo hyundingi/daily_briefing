@@ -48,8 +48,6 @@ competitor-newsletter/
 │     └─ daily-newsletter.yml
 ├─ company_profiles/
 ├─ docs/
-├─ public/
-│  └─ archive/
 ├─ src/
 ├─ state/
 │  ├─ company_timelines/
@@ -92,15 +90,6 @@ Gemini가 “왜 봐야 하는지”, “이전 흐름과 무엇이 다른지”
 
 회사 프로필과 저장 데이터의 정리 기준을 설명하는 문서입니다.
 
-### `public/`
-
-기존 GitHub Pages 결과물입니다.
-
-- `public/index.html`: 기존 아카이브형 메인 페이지
-- `public/archive/YYYY-MM-DD.html`: 과거 뉴스레터 HTML
-
-현재 Cloudflare Worker 웹페이지가 운영 중심이지만, 기존 뉴스레터 HTML을 D1 아카이브에 초기 적재할 때 사용했습니다.
-
 ### `src/`
 
 Python 기반 뉴스레터 생성 파이프라인입니다.
@@ -110,10 +99,8 @@ Python 기반 뉴스레터 생성 파이프라인입니다.
 - `issue_clusterer.py`: 유사 뉴스 묶음 처리
 - `briefing_analyzer.py`: 회사 프로필과 과거 이력을 참고해 브리핑 분석 생성
 - `newsletter_renderer.py`: 메일용 HTML 뉴스레터 생성
-- `page_renderer.py`: 기존 GitHub Pages HTML 생성
 - `email_sender.py`: SMTP 메일 발송
 - `worker_newsletter_sender.py`: Worker가 생성한 미발송 뉴스레터 HTML을 가져와 메일 발송
-- `archive_sql_exporter.py`: 기존 `public/archive` HTML을 D1 아카이브로 옮기기 위한 유지보수 도구
 - `company_profiles.py`: 회사 프로필 로딩
 
 ### `state/`
