@@ -207,17 +207,22 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
 
 async function latestRefreshTime(env) {
   const row = await env.DB.prepare("SELECT finished_at FROM refresh_runs WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1").first();
-  return row ? row.finished_at : "";
+  if (row) return row.finished_at;
+  const seeded = await env.DB.prepare("SELECT MAX(last_seen_at) AS updated_at FROM (SELECT last_seen_at FROM disclosures UNION ALL SELECT last_seen_at FROM news_articles)").first();
+  return seeded ? seeded.updated_at || "" : "";
 }
 
 async function archiveIndexFromD1(env) {
-  const rows = await env.DB.prepare(`SELECT r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
+  const rows = await env.DB.prepare(`SELECT r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, r.summary_json, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
     FROM newsletter_runs r LEFT JOIN newsletter_items i ON r.id = i.run_id
     WHERE r.sent_at IS NOT NULL
     GROUP BY r.id
     ORDER BY r.sent_at DESC
     LIMIT 120`).all();
-  return (rows.results || []).map((row) => ({ date: row.date, updated_at: row.updated_at, subject: row.subject || `${row.date} 뉴스레터`, disclosure_count: row.disclosure_count || 0, news_count: row.news_count || 0 }));
+  return (rows.results || []).map((row) => {
+    const summary = parseJson(row.summary_json, {});
+    return { date: row.date, updated_at: row.updated_at, subject: row.subject || `${row.date} 뉴스레터`, disclosure_count: row.disclosure_count || summary.disclosure_count || 0, news_count: row.news_count || summary.news_count || 0 };
+  });
 }
 
 async function archiveBriefingFromD1(env, date) {

@@ -8,5 +8,6 @@ state/dart_disclosure_summary_cache.csv
 state/news_articles.csv
 newsletter_preview.html
 worker/wrangler.toml
+worker/seed_from_existing.sql
 worker/node_modules/
 .wrangler/
