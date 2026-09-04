@@ -1168,7 +1168,7 @@ function renderPage() {
     .filters { display:grid; grid-template-columns:190px 190px 1fr; gap:10px; padding:16px; background:var(--soft); border-radius:22px; margin:18px 0; }
     .tabs { display:flex; gap:8px; margin:20px 0 16px; }
     .tab.active { background:#1f2d3d; color:#fff; }
-    .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:16px 0; }
+    .summary { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin:16px 0; }
     .metric, .card { background:var(--paper); border-radius:20px; box-shadow:0 8px 24px rgba(45,37,25,.05); }
     .metric { padding:16px 18px; color:var(--muted); font-weight:800; }
     .metric strong { display:block; margin-top:6px; color:var(--ink); font-size:28px; }
@@ -1189,6 +1189,9 @@ function renderPage() {
     .archive-row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
     .newsletter-view { margin-top:14px; }
     .newsletter-frame { width:100%; min-height:760px; border:0; border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(45,37,25,.05); }
+    .admin-actions { display:none; margin:10px 0 18px; padding:12px 14px; border-radius:18px; background:#f7f2ea; color:var(--muted); align-items:center; justify-content:space-between; gap:12px; }
+    .admin-actions.open { display:flex; }
+    .admin-actions p { margin:0; font-size:13px; }
     @media (max-width:760px) { header { display:block; } .actions { justify-content:flex-start; margin-top:16px; } .filters, .summary { grid-template-columns:1fr; } .top, .archive-row { display:block; } }
   </style>
 </head>
@@ -1201,15 +1204,16 @@ function renderPage() {
       </div>
       <div class="actions">
         <span id="status" class="sub">불러오는 중...</span>
-        <button id="summarize" type="button">AI 요약 채우기</button>
         <button id="refresh" class="primary" type="button">업데이트</button>
       </div>
     </header>
     <section class="summary">
-      <div class="metric">전체 공시<strong id="count-disclosures">0</strong></div>
-      <div class="metric">전체 뉴스<strong id="count-news">0</strong></div>
-      <div class="metric">중요 공시<strong id="count-important-disclosures">0</strong></div>
-      <div class="metric">중요 뉴스<strong id="count-important-news">0</strong></div>
+      <div class="metric">오늘 공시<strong id="count-disclosures">0</strong></div>
+      <div class="metric">오늘 뉴스<strong id="count-news">0</strong></div>
+    </section>
+    <section id="admin-actions" class="admin-actions" aria-hidden="true">
+      <p>관리자 도구입니다. 요약 없는 최신 항목 10건만 AI 요약으로 채웁니다.</p>
+      <button id="summarize" type="button">AI 요약 채우기</button>
     </section>
     <section class="filters">
       <select id="company"><option value="">전체 기업</option>${companies}</select>
@@ -1244,14 +1248,26 @@ function renderPage() {
 
     function render() {
       $('status').textContent = briefing.updated_at ? '데이터 업데이트: ' + briefing.updated_at : '저장된 브리핑 없음';
-      $('count-disclosures').textContent = briefing.summary?.disclosure_count ?? briefing.disclosures?.length ?? 0;
-      $('count-news').textContent = briefing.summary?.news_count ?? briefing.news?.length ?? 0;
-      $('count-important-disclosures').textContent = briefing.summary?.important_disclosure_count ?? 0;
-      $('count-important-news').textContent = briefing.summary?.important_news_count ?? 0;
+      $('count-disclosures').textContent = todayDisclosures().length;
+      $('count-news').textContent = todayNews().length;
       renderCategoryOptions();
       renderDisclosures();
       renderNews();
       renderArchive();
+    }
+
+    function todayKey() {
+      return briefing.date || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+    }
+
+    function todayDisclosures() {
+      const date = todayKey();
+      return (briefing.disclosures || []).filter((item) => String(item.date || '').slice(0, 10) === date);
+    }
+
+    function todayNews() {
+      const date = todayKey();
+      return (briefing.news || []).filter((item) => String(item.published_at || '').slice(0, 10) === date);
     }
 
     function renderCategoryOptions() {
@@ -1280,7 +1296,7 @@ function renderPage() {
       const rows = filtered(briefing.news || []);
       $('news').innerHTML = rows.length ? rows.map((item) => {
         const ai = itemAi(item);
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '<p class="body"><strong>기사 주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '<p class="body"><strong>기사 원문 일부</strong><br>' + esc(item.summary || '') + '</p></article>';
       }).join('') : '<div class="empty">조건에 맞는 뉴스가 없습니다.</div>';
     }
 
@@ -1292,8 +1308,12 @@ function renderPage() {
 
     function renderAiBlock(ai) {
       if (!ai || ai.generated_by !== 'gemini') return '';
-      const lines = [ai.summary, ai.key_points, ai.caution].filter(Boolean).map(esc);
+      const lines = [ai.summary, ai.key_points, ai.caution].flatMap(aiLines).filter(Boolean).map(esc);
       return lines.length ? '<div class="point"><strong>AI 요약</strong><br>' + lines.join('<br>') + '</div>' : '';
+    }
+
+    function aiLines(value) {
+      return String(value || '').replace(/<br\\s*\\/?>/gi, '\\n').split(/\\n+/).map((line) => line.trim()).filter(Boolean);
     }
 
     function renderArchive() {
@@ -1330,6 +1350,13 @@ function renderPage() {
     $('company').onchange = (event) => { state.company = event.target.value; render(); };
     $('category').onchange = (event) => { state.category = event.target.value; render(); };
     $('search').oninput = (event) => { state.search = event.target.value.trim().toLowerCase(); render(); };
+    document.addEventListener('keydown', (event) => {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'a') {
+        const panel = $('admin-actions');
+        panel.classList.toggle('open');
+        panel.setAttribute('aria-hidden', panel.classList.contains('open') ? 'false' : 'true');
+      }
+    });
     $('summarize').onclick = async () => {
       const button = $('summarize');
       button.disabled = true;
