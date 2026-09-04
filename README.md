@@ -47,11 +47,7 @@ competitor-newsletter/
 │  └─ workflows/
 │     └─ daily-newsletter.yml
 ├─ company_profiles/
-├─ docs/
 ├─ src/
-├─ state/
-│  ├─ company_timelines/
-│  └─ daily_briefings/
 ├─ worker/
 │  ├─ migrations/
 │  └─ src/
@@ -86,10 +82,6 @@ GitHub Actions 자동 실행 파일입니다.
 
 Gemini가 “왜 봐야 하는지”, “이전 흐름과 무엇이 다른지”를 판단할 때 회사 맥락으로 사용합니다.
 
-### `docs/data_schema.md`
-
-회사 프로필과 저장 데이터의 정리 기준을 설명하는 문서입니다.
-
 ### `src/`
 
 Python 기반 뉴스레터 생성 파이프라인입니다.
@@ -102,20 +94,6 @@ Python 기반 뉴스레터 생성 파이프라인입니다.
 - `email_sender.py`: SMTP 메일 발송
 - `worker_newsletter_sender.py`: Worker가 생성한 미발송 뉴스레터 HTML을 가져와 메일 발송
 - `company_profiles.py`: 회사 프로필 로딩
-
-### `state/`
-
-기존 Python/GitHub Actions가 사용하던 상태 저장 폴더입니다.
-
-- `newsletter_state.json`: 이미 발송한 공시 접수번호와 뉴스 링크
-- `archive_index.json`: 기존 뉴스레터 아카이브 목록
-- `issue_history.json`: 이슈 흐름 기록
-- `daily_briefings/YYYY-MM-DD.json`: 날짜별 AI/규칙 기반 브리핑 결과
-- `company_timelines/회사명.json`: 회사별 최근 브리핑 흐름
-- `dart_disclosure_view.csv`: 기존 공시 수집 결과
-- `news_articles.csv`: 기존 뉴스 수집 결과
-
-현재 D1 초기 적재에도 이 폴더의 JSON/CSV를 사용했습니다.
 
 ### `worker/`
 
