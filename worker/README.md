@@ -72,8 +72,22 @@ wrangler secret put UPDATE_PASSWORD
 wrangler secret put GEMINI_MODEL
 ```
 
-`UPDATE_PASSWORD`는 웹페이지의 업데이트 버튼과 AI 요약 채우기 버튼 보호용입니다.
+`UPDATE_PASSWORD`는 관리자용 API와 숨김 AI 요약 채우기 기능 보호용입니다.
 GitHub Actions가 뉴스레터 생성/조회/발송 완료 기록 API를 호출할 때도 같은 값을 사용합니다.
+
+## 자동 업데이트 동작
+
+Cloudflare Worker cron trigger가 30분마다 실행됩니다.
+
+1. Worker scheduled handler 실행
+2. `lock:refresh`로 중복 실행 방지
+3. DART 공시와 NAVER API HUB 뉴스 수집
+4. D1에 이미 있는 항목은 건너뜀
+5. 새 공시가 있으면 DART `document.xml` 원문 ZIP을 받아 본문 텍스트 추출
+6. 새 항목이 있으면 Gemini가 개별 공시/기사 요약 생성
+7. Gemini 결과가 성공이면 `item_ai_summaries`에 저장
+
+웹페이지 상단의 데이터 업데이트 시간은 마지막 업데이트 완료 시각을 표시합니다.
 
 ## D1 마이그레이션
 
@@ -90,10 +104,12 @@ pnpm install
 pnpm deploy
 ```
 
-## 수동 업데이트 동작
+## 관리자/자동화용 수동 업데이트 API
 
-1. 사용자가 웹페이지에서 업데이트 버튼 클릭
-2. `UPDATE_PASSWORD` 입력
+웹페이지에는 일반 사용자용 업데이트 버튼을 노출하지 않습니다. 다만 GitHub Actions 아침 뉴스레터 발송 전 최신 데이터를 확인하기 위해 `/api/refresh` API는 유지합니다.
+
+1. `/api/refresh` 호출
+2. `UPDATE_PASSWORD` 검증
 3. Worker가 DART 공시와 NAVER API HUB 뉴스를 수집
 4. D1에 이미 있는 항목은 건너뜀
 5. 새 공시가 있으면 DART `document.xml` 원문 ZIP을 받아 본문 텍스트 추출
@@ -103,14 +119,15 @@ pnpm deploy
 
 새 항목이 없으면 Gemini를 호출하지 않습니다.
 
-## AI 요약 채우기 동작
+## 숨김 AI 요약 채우기 동작
 
-1. 사용자가 웹페이지에서 AI 요약 채우기 버튼 클릭
-2. `UPDATE_PASSWORD` 입력
-3. D1에 저장된 공시/뉴스 중 아직 `item_ai_summaries`가 없는 최신 항목 10건 조회
-4. 공시는 DART 원문 텍스트, 뉴스는 기사 제목/요약문 기준으로 개별 요약 생성
-5. 성공한 요약만 `item_ai_summaries`에 저장
-6. 페이지는 최신 D1 데이터를 다시 불러옴
+1. 관리자가 웹페이지에서 `Ctrl + Alt + A`로 숨김 관리자 패널 열기
+2. AI 요약 채우기 버튼 클릭
+3. `UPDATE_PASSWORD` 입력
+4. D1에 저장된 공시/뉴스 중 아직 `item_ai_summaries`가 없는 최신 항목 10건 조회
+5. 공시는 DART 원문 텍스트, 뉴스는 기사 제목/요약문 기준으로 개별 요약 생성
+6. 성공한 요약만 `item_ai_summaries`에 저장
+7. 페이지는 최신 D1 데이터를 다시 불러옴
 
 요약할 항목이 없으면 Gemini를 호출하지 않습니다. 무료 한도와 응답 속도를 위해 한 번에 처리하는 기본 수량은 10건입니다.
 

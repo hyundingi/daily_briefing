@@ -74,7 +74,32 @@ export default {
       return jsonResponse({ ok: false, error: String(error && error.message ? error.message : error) }, status);
     }
   },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(scheduledRefresh(env, event));
+  },
 };
+
+async function scheduledRefresh(env, event) {
+  const locked = await env.BRIEFING_KV.get("lock:refresh");
+  if (locked) {
+    console.log("scheduled_refresh_skipped", JSON.stringify({ reason: "locked", cron: event && event.cron }));
+    return;
+  }
+  await env.BRIEFING_KV.put("lock:refresh", JSON.stringify({ started_at: new Date().toISOString(), source: "scheduled" }), { expirationTtl: 300 });
+  try {
+    if (!env.DB) {
+      console.log("scheduled_refresh_skipped", JSON.stringify({ reason: "missing_db", cron: event && event.cron }));
+      return;
+    }
+    const response = await refreshWithD1(env);
+    const result = await response.json().catch(() => ({}));
+    console.log("scheduled_refresh_done", JSON.stringify({ cron: event && event.cron, added: result.added || {}, updated_at: result.briefing && result.briefing.updated_at }));
+  } catch (error) {
+    console.log("scheduled_refresh_failed", JSON.stringify({ cron: event && event.cron, reason: safeError(error) }));
+  } finally {
+    await env.BRIEFING_KV.delete("lock:refresh");
+  }
+}
 
 async function refresh(request, env) {
   await requireUpdatePassword(request, env);
@@ -1396,7 +1421,6 @@ function renderPage() {
       </div>
       <div class="actions">
         <span id="status" class="sub">불러오는 중...</span>
-        <button id="refresh" class="primary" type="button">업데이트</button>
       </div>
     </header>
     <section class="summary">
@@ -1580,33 +1604,6 @@ function renderPage() {
       } finally {
         button.disabled = false;
         button.textContent = 'AI 요약 채우기';
-        render();
-      }
-    };
-    $('refresh').onclick = async () => {
-      const button = $('refresh');
-      button.disabled = true;
-      button.textContent = '업데이트 중...';
-      $('status').textContent = '새 데이터 확인 중... 기존 데이터는 그대로 유지됩니다.';
-      try {
-        const password = prompt('업데이트 비밀번호를 입력해주세요.') || '';
-        if (!password) throw new Error('업데이트 비밀번호가 입력되지 않았습니다.');
-        const response = await fetch('/api/refresh', { method:'POST', headers:{ 'x-update-password': password } });
-        if (response.status === 409) {
-          alert('이미 업데이트가 진행 중입니다. 잠시 후 다시 확인해주세요.');
-        } else if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          alert(errorBody.error || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
-        } else {
-          const data = await response.json();
-          await load();
-          alert('업데이트 완료: 새 공시 ' + (data.added?.disclosures ?? 0) + '건, 새 뉴스 ' + (data.added?.news ?? 0) + '건 추가');
-        }
-      } catch (error) {
-        alert(error.message || '업데이트에 실패했습니다. 기존 데이터는 유지됩니다.');
-      } finally {
-        button.disabled = false;
-        button.textContent = '업데이트';
         render();
       }
     };

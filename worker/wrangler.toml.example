@@ -2,6 +2,12 @@ name = "competitor-newsletter"
 main = "src/index.js"
 compatibility_date = "2026-09-03"
 
+[placement]
+region = "gcp:asia-northeast3"
+
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[kv_namespaces]]
 binding = "BRIEFING_KV"
 id = "YOUR_KV_NAMESPACE_ID"
