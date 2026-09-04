@@ -794,6 +794,8 @@ function renderPage() {
     .panel.active { display:block; }
     .empty { padding:28px; text-align:center; color:#8b8378; }
     .archive-row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    .newsletter-view { margin-top:14px; }
+    .newsletter-frame { width:100%; min-height:760px; border:0; border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(45,37,25,.05); }
     @media (max-width:760px) { header { display:block; } .actions { justify-content:flex-start; margin-top:16px; } .filters, .summary { grid-template-columns:1fr; } .top, .archive-row { display:block; } }
   </style>
 </head>
@@ -888,13 +890,23 @@ function renderPage() {
     function renderArchive() {
       $('archive').innerHTML = archive.length ? archive.map((item) => '<article class="card archive-row"><div><h2>' + esc(item.date) + ' 브리핑</h2><p class="body">공시 ' + esc(item.disclosure_count) + '건 · 뉴스 ' + esc(item.news_count) + '건</p></div><button type="button" data-date="' + esc(item.date) + '">보기</button></article>').join('') : '<div class="empty">저장된 아카이브가 없습니다.</div>';
       document.querySelectorAll('[data-date]').forEach((button) => {
-        button.onclick = async () => {
-          const response = await fetch('/api/archive/' + button.dataset.date);
-          briefing = await response.json();
-          setTab('disclosures');
-          render();
-        };
+        button.onclick = () => showNewsletterArchive(button.dataset.date);
       });
+    }
+
+    async function showNewsletterArchive(date) {
+      $('archive').innerHTML = '<div class="empty">뉴스레터를 불러오는 중...</div>';
+      const response = await fetch('/api/archive/' + date);
+      const data = await response.json();
+      const html = data.newsletter?.html || '';
+      if (!html) {
+        $('archive').innerHTML = '<article class="card"><button type="button" id="archive-back">목록으로</button><div class="empty">저장된 뉴스레터 전문이 없습니다.</div></article>';
+        $('archive-back').onclick = renderArchive;
+        return;
+      }
+      $('archive').innerHTML = '<article class="card newsletter-view"><div class="top"><div><h2>' + esc(data.newsletter?.subject || date + ' 브리핑') + '</h2><p class="body">' + esc(data.updated_at || '') + ' 발송 뉴스레터</p></div><button type="button" id="archive-back">목록으로</button></div><iframe id="newsletter-frame" class="newsletter-frame" title="뉴스레터 전문"></iframe></article>';
+      $('archive-back').onclick = renderArchive;
+      $('newsletter-frame').srcdoc = html;
     }
 
     function setTab(tab) {
