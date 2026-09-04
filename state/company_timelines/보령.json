@@ -1,6 +1,6 @@
 {
   "company": "보령",
-  "updated_at": "2026-09-03",
+  "updated_at": "2026-09-04",
   "events": [
     {
       "date": "2026-08-31",
@@ -43,6 +43,28 @@
       "confidence": "high",
       "evidence": [
         "2026-09-02 hitnews: [경력채용] 제일약품, 대웅제약, 녹십자웰빙, 보령, 삼일제약"
+      ],
+      "generated_by": "gemini"
+    },
+    {
+      "date": "2026-09-04",
+      "company": "보령",
+      "issue_type": "홍보",
+      "priority": "low",
+      "summary": "계열사 관련 경력채용 종합 모음 기사가 보도되었습니다.",
+      "news_summary": "제약업계 채용 현황을 다룬 모음 기사에서 보령바이오파마의 경력채용 소식이 언급되었습니다.",
+      "watch_reason": "판단 규칙상 채용 관련 보도는 priority를 low로 설정하며, 보령의 만성질환 치료제 매출 성장이나 신사업 투자 등 핵심 관찰 포인트와 무관하여 중요하지 않습니다.",
+      "previous_context": "이전의 단순 채용 보도(09-03) 및 무관 기사(08-31)와 동일하게 실질적 사업 임팩트가 없는 단신 흐름이 지속되고 있습니다.",
+      "check_points": [
+        "카나브 패밀리 등 주요 품목의 성장세 지속 여부 확인"
+      ],
+      "topics": [
+        "경력채용",
+        "단순모음기사"
+      ],
+      "confidence": "high",
+      "evidence": [
+        "[경력채용] 대원제약, 삼일제약, 보령바이오파마, 한풍제약, 클래시스 (hitnews)"
       ],
       "generated_by": "gemini"
     }

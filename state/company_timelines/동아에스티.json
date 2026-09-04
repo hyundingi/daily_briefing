@@ -1,6 +1,6 @@
 {
   "company": "동아에스티",
-  "updated_at": "2026-09-03",
+  "updated_at": "2026-09-04",
   "events": [
     {
       "date": "2026-09-03",
@@ -22,6 +22,30 @@
       "confidence": "high",
       "evidence": [
         "2026-09-02 medigatenews: 동아에스티, 지속가능경영보고서 ‘온(溫, ON)’ LACP 비전 어워즈 플래..."
+      ],
+      "generated_by": "gemini"
+    },
+    {
+      "date": "2026-09-04",
+      "company": "동아에스티",
+      "issue_type": "대외평가",
+      "priority": "low",
+      "summary": "지속가능경영보고서의 'LACP 비전 어워즈' 플래티넘 수상 보도가 확인되었습니다.",
+      "news_summary": "동아에스티의 지속가능경영보고서 '온'이 LACP 비전 어워즈에서 플래티넘을 수상했다는 소식입니다.",
+      "watch_reason": "단순 수상 관련 보도로, 임상, 품목허가, 공급계약 등 주요 관찰 포인트 및 실적에 미치는 사업적 영향이 없어 중요하지 않습니다.",
+      "previous_context": "이전 흐름(2026-09-03 LACP 비전 어워즈 수상 보도)과 동일한 단순 수상성 보도의 반복입니다.",
+      "check_points": [
+        "핵심 R&D 파이프라인 진행 상황 및 주요 제품 매출 흐름 점검"
+      ],
+      "topics": [
+        "LACP비전어워즈",
+        "지속가능경영보고서",
+        "수상보도"
+      ],
+      "confidence": "high",
+      "evidence": [
+        "동아에스티, 'LACP 비전 어워즈' 플래티넘 수상…지속가능보고서 99점 (newslock)",
+        "동아에스티 '온', 세계 100대 보고서 44위…LACP 플래티넘 수상 (thepublic)"
       ],
       "generated_by": "gemini"
     }
