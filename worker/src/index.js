@@ -1,5 +1,8 @@
+import { strFromU8, unzipSync } from "fflate";
+
 const DART_VIEWER_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=";
 const DART_LIST_URL = "https://opendart.fss.or.kr/api/list.json";
+const DART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml";
 const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 
@@ -46,6 +49,7 @@ const IMPORTANT_KEYWORDS = ["기술이전", "라이선스", "임상", "품목허
 const IMPORTANT_CATEGORIES = new Set(["사업/계약", "투자/M&A", "자금조달"]);
 const MAX_STORED_ITEMS = 500;
 const RETENTION_DAYS = 30;
+const MAX_DISCLOSURE_TEXT_CHARS = 9000;
 
 export default {
   async fetch(request, env) {
@@ -331,6 +335,7 @@ async function cleanupOldData(env, now) {
     env.DB.prepare("DELETE FROM news_articles WHERE first_seen_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM ai_briefings WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM item_ai_summaries WHERE created_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM disclosure_documents WHERE fetched_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_items WHERE run_id IN (SELECT id FROM newsletter_runs WHERE created_at < ?)").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_runs WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM refresh_runs WHERE started_at < ?").bind(cutoff),
@@ -588,16 +593,24 @@ async function analyzeItems(env, disclosures, news, diagnostics) {
     return [];
   }
 
+  const disclosureInputs = [];
+  for (const item of disclosures) {
+    const document = await disclosureDocumentText(env, item, diagnostics);
+    if (!document.text) continue;
+    disclosureInputs.push({ item, documentText: document.text });
+  }
+
   const items = [
-    ...disclosures.map((item) => ({
+    ...disclosureInputs.map(({ item, documentText }) => ({
       item_type: "disclosure",
       item_id: disclosureKey(item),
       company: item.company,
       category: item.category,
       title: item.title,
       date: item.date,
-      note: item.note || "",
-      source_text: [item.title, item.note].filter(Boolean).join(" / "),
+      receipt_no: item.receipt_no || "",
+      source_type: "dart_original_document",
+      source_text: documentText,
     })),
     ...news.map((item) => ({
       item_type: "news",
@@ -611,6 +624,11 @@ async function analyzeItems(env, disclosures, news, diagnostics) {
     })),
   ];
 
+  if (!items.length) {
+    diagnostics.push({ step: "gemini_item", status: "no_usable_source" });
+    return [];
+  }
+
   const prompt = {
     role: "공시와 뉴스의 개별 항목 요약 담당자",
     goal: "각 항목을 서로 섞지 않고, 해당 항목 자체에 있는 정보만 바탕으로 짧고 정확하게 요약합니다.",
@@ -620,7 +638,9 @@ async function analyzeItems(env, disclosures, news, diagnostics) {
       "공시 항목에는 뉴스 내용을 연결하지 않습니다.",
       "뉴스 항목에는 다른 공시나 회사 최근 동향을 연결하지 않습니다.",
       "source_text에 없는 사실은 추정하지 않습니다.",
-      "정보가 부족하면 부족하다고 짧게 씁니다.",
+      "disclosure 항목의 source_text는 DART 원문에서 추출한 텍스트입니다. 공시 요약은 반드시 이 원문 텍스트만 근거로 씁니다.",
+      "원문에서 금액, 상대방, 일정, 사유, 영향이 확인되면 구체적으로 적습니다.",
+      "원문에서 확인되지 않는 내용은 추정하지 말고 caution에 '원문 표/첨부의 세부 항목 확인 필요'처럼 확인 행동만 씁니다.",
       "summary는 한 문장, key_points는 핵심 내용 1~2문장, caution은 확인할 점이 있을 때만 한 문장으로 씁니다.",
     ],
     output_format: {
@@ -688,6 +708,137 @@ function normalizeItemSummaries(parsed, inputItems, model) {
     });
   }
   return result;
+}
+
+async function disclosureDocumentText(env, item, diagnostics) {
+  const receiptNo = clean(item.receipt_no);
+  if (!receiptNo) {
+    diagnostics.push({ step: "dart_document", status: "missing_receipt_no", title: item.title });
+    return { text: "", status: "missing_receipt_no" };
+  }
+
+  const cached = await disclosureDocumentFromCache(env, receiptNo);
+  if (cached && cached.document_text) {
+    diagnostics.push({ step: "dart_document", status: "cache_hit", receipt_no: receiptNo, chars: cached.document_text.length });
+    return { text: cached.document_text, status: "cache_hit" };
+  }
+
+  const url = new URL(DART_DOCUMENT_URL);
+  url.searchParams.set("crtfc_key", env.DART_API_KEY || "");
+  url.searchParams.set("rcept_no", receiptNo);
+
+  let fetchedAt = kstTimestamp(new Date());
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Accept": "application/zip,application/xml,text/xml,*/*",
+        "User-Agent": "Mozilla/5.0 competitor-newsletter/1.0",
+      },
+    });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!response.ok) {
+      const reason = `http_${response.status}`;
+      await saveDisclosureDocument(env, receiptNo, item, "", "http_error", reason, fetchedAt);
+      diagnostics.push({ step: "dart_document", status: "http_error", receipt_no: receiptNo, code: response.status });
+      return { text: "", status: "http_error" };
+    }
+
+    if (!isZip(bytes)) {
+      const message = strFromU8(bytes).slice(0, 500);
+      const reason = dartDocumentErrorReason(message);
+      await saveDisclosureDocument(env, receiptNo, item, "", "api_error", reason, fetchedAt);
+      diagnostics.push({ step: "dart_document", status: "api_error", receipt_no: receiptNo, reason });
+      return { text: "", status: "api_error" };
+    }
+
+    const text = extractTextFromDartZip(bytes);
+    if (!text) {
+      await saveDisclosureDocument(env, receiptNo, item, "", "empty", "zip_text_empty", fetchedAt);
+      diagnostics.push({ step: "dart_document", status: "empty", receipt_no: receiptNo });
+      return { text: "", status: "empty" };
+    }
+
+    const trimmed = text.slice(0, MAX_DISCLOSURE_TEXT_CHARS);
+    await saveDisclosureDocument(env, receiptNo, item, trimmed, "success", "", fetchedAt);
+    diagnostics.push({ step: "dart_document", status: "success", receipt_no: receiptNo, chars: trimmed.length });
+    return { text: trimmed, status: "success" };
+  } catch (_) {
+    const reason = safeError(_);
+    await saveDisclosureDocument(env, receiptNo, item, "", "exception", reason, fetchedAt);
+    diagnostics.push({ step: "dart_document", status: "exception", receipt_no: receiptNo, reason });
+    return { text: "", status: "exception" };
+  }
+}
+
+async function disclosureDocumentFromCache(env, receiptNo) {
+  if (!env.DB) return null;
+  try {
+    return await env.DB.prepare("SELECT document_text, status FROM disclosure_documents WHERE receipt_no = ? AND status = 'success' LIMIT 1").bind(receiptNo).first();
+  } catch (_) {
+    return null;
+  }
+}
+
+async function saveDisclosureDocument(env, receiptNo, item, documentText, status, error, fetchedAt) {
+  if (!env.DB) return;
+  try {
+    await env.DB.prepare(`INSERT INTO disclosure_documents (receipt_no, company, title, document_text, status, error, fetched_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(receipt_no) DO UPDATE SET company=excluded.company, title=excluded.title, document_text=excluded.document_text, status=excluded.status, error=excluded.error, fetched_at=excluded.fetched_at`)
+      .bind(receiptNo, item.company || "", item.title || "", documentText || "", status || "", error || "", fetchedAt).run();
+  } catch (_) {
+    // 원문 캐시 실패가 전체 요약 생성을 막지는 않게 둡니다.
+  }
+}
+
+function isZip(bytes) {
+  return bytes && bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+}
+
+function extractTextFromDartZip(bytes) {
+  const files = unzipSync(bytes);
+  const entries = Object.entries(files)
+    .filter(([name]) => /\.(xml|html?|xhtml)$/i.test(name))
+    .sort((a, b) => b[1].length - a[1].length);
+  const chunks = [];
+  for (const [, content] of entries) {
+    const raw = strFromU8(content);
+    const plain = xmlToPlainText(raw);
+    if (plain) chunks.push(plain);
+    if (chunks.join("\n").length >= MAX_DISCLOSURE_TEXT_CHARS) break;
+  }
+  return clean(chunks.join("\n")).slice(0, MAX_DISCLOSURE_TEXT_CHARS);
+}
+
+function xmlToPlainText(value) {
+  return decodeEntities(String(value || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--([\s\S]*?)-->/g, " ")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, " $1 ")
+    .replace(/<[^>]+>/g, "\n"))
+    .replace(/[ \t\r\f\v]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decodeEntities(value) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  return String(value || "").replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, entity) => {
+    const key = entity.toLowerCase();
+    if (key[0] === "#") {
+      const code = key[1] === "x" ? parseInt(key.slice(2), 16) : parseInt(key.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : " ";
+    }
+    return Object.prototype.hasOwnProperty.call(named, key) ? named[key] : " ";
+  });
+}
+
+function dartDocumentErrorReason(text) {
+  const status = (String(text || "").match(/<status>(.*?)<\/status>/i) || [])[1] || "";
+  const message = (String(text || "").match(/<message>(.*?)<\/message>/i) || [])[1] || "";
+  return [status, message].filter(Boolean).join(": ").slice(0, 300) || "not_zip_response";
 }
 
 function fallbackAnalysis(disclosures, news) {
@@ -1141,8 +1292,8 @@ function renderPage() {
 
     function renderAiBlock(ai) {
       if (!ai || ai.generated_by !== 'gemini') return '';
-      const content = [ai.summary, ai.key_points, ai.caution].filter(Boolean).join('<br>');
-      return content ? '<div class="point"><strong>AI 요약</strong><br>' + esc(content) + '</div>' : '';
+      const lines = [ai.summary, ai.key_points, ai.caution].filter(Boolean).map(esc);
+      return lines.length ? '<div class="point"><strong>AI 요약</strong><br>' + lines.join('<br>') + '</div>' : '';
     }
 
     function renderArchive() {

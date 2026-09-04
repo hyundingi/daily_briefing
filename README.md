@@ -32,6 +32,7 @@
 - Gemini는 페이지 업데이트 때 항상 돌지 않습니다.
 - 새로 추가된 공시/뉴스가 있을 때만 해당 신규 항목을 요약합니다.
 - 기존에 저장되어 있지만 아직 AI 요약이 없는 항목은 웹페이지의 AI 요약 채우기 버튼으로 10건씩 보강합니다.
+- 공시는 DART `document.xml` 원문 ZIP을 받아 본문 텍스트를 추출한 뒤 요약합니다. 원문을 가져오지 못하면 제목만으로 공시 요약을 만들지 않습니다.
 - 개별 공시/기사 요약은 D1의 `item_ai_summaries`에 저장합니다.
 - 회사별/뉴스레터용 종합 브리핑은 D1의 `ai_briefings`에 저장합니다.
 - 뉴스레터 생성 시 이미 저장된 AI 요약이 있으면 재사용하고, 없으면 그때 추가 생성하는 방향입니다.
@@ -137,6 +138,7 @@ Cloudflare Worker 웹앱입니다.
 - DART/NAVER API HUB에서 새 공시/뉴스를 수집합니다.
 - D1에 최근 30일 데이터를 누적 저장합니다.
 - 요약이 없는 기존 항목을 최신순으로 10건씩 Gemini 요약으로 보강합니다.
+- 공시 원문 추출 텍스트는 D1의 `disclosure_documents`에 캐시합니다.
 - 발송된 뉴스레터 아카이브를 보여줍니다.
 
 자세한 설정은 `worker/README.md`를 참고합니다.
@@ -164,6 +166,7 @@ D1 DB 테이블 생성 파일입니다.
 - `news_articles`: 뉴스 기사 누적 저장
 - `ai_briefings`: Gemini 요약 저장
 - `item_ai_summaries`: 개별 공시/기사별 Gemini 요약 저장
+- `disclosure_documents`: DART 원문 ZIP에서 추출한 공시 본문 텍스트 캐시
 - `newsletter_runs`: 뉴스레터 발송 단위 저장
 - `newsletter_items`: 뉴스레터에 포함된 공시/뉴스 저장
 - `refresh_runs`: 업데이트 실행 로그 저장

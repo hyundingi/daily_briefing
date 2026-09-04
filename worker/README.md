@@ -21,6 +21,7 @@ Cloudflare Worker + D1로 운영되는 경쟁사 브리핑 웹앱입니다.
 - `news_articles`: 뉴스 기사 데이터
 - `ai_briefings`: Gemini 요약/판단 결과
 - `item_ai_summaries`: 페이지 카드에 붙는 개별 공시/기사 Gemini 요약
+- `disclosure_documents`: DART 원문 ZIP에서 추출한 공시 본문 텍스트 캐시
 - `newsletter_runs`: 뉴스레터 발송 기록과 HTML 전문
 - `newsletter_items`: 뉴스레터에 포함된 공시/뉴스 목록
 - `refresh_runs`: 업데이트 실행 로그
@@ -90,9 +91,10 @@ pnpm deploy
 2. `UPDATE_PASSWORD` 입력
 3. Worker가 DART 공시와 NAVER API HUB 뉴스를 수집
 4. D1에 이미 있는 항목은 건너뜀
-5. 새 항목이 있으면 Gemini가 개별 공시/기사 요약 생성
-6. Gemini 결과가 성공이면 `item_ai_summaries`에 저장
-7. 페이지는 최신 D1 데이터를 다시 불러옴
+5. 새 공시가 있으면 DART `document.xml` 원문 ZIP을 받아 본문 텍스트 추출
+6. 새 항목이 있으면 Gemini가 개별 공시/기사 요약 생성
+7. Gemini 결과가 성공이면 `item_ai_summaries`에 저장
+8. 페이지는 최신 D1 데이터를 다시 불러옴
 
 새 항목이 없으면 Gemini를 호출하지 않습니다.
 
@@ -101,11 +103,13 @@ pnpm deploy
 1. 사용자가 웹페이지에서 AI 요약 채우기 버튼 클릭
 2. `UPDATE_PASSWORD` 입력
 3. D1에 저장된 공시/뉴스 중 아직 `item_ai_summaries`가 없는 최신 항목 10건 조회
-4. Gemini가 각 공시/기사 자체 내용만 기준으로 개별 요약 생성
+4. 공시는 DART 원문 텍스트, 뉴스는 기사 제목/요약문 기준으로 개별 요약 생성
 5. 성공한 요약만 `item_ai_summaries`에 저장
 6. 페이지는 최신 D1 데이터를 다시 불러옴
 
 요약할 항목이 없으면 Gemini를 호출하지 않습니다. 무료 한도와 응답 속도를 위해 한 번에 처리하는 기본 수량은 10건입니다.
+
+공시 원문을 가져오지 못한 항목은 제목만으로 요약하지 않습니다. 이 경우 Gemini 요약 저장 대상에서 제외됩니다.
 
 ## 아카이브
 
@@ -121,6 +125,7 @@ pnpm deploy
 - 뉴스
 - AI 브리핑
 - 개별 AI 요약
+- 공시 원문 캐시
 - 뉴스레터 기록
 - 업데이트 로그
 
