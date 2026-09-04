@@ -343,7 +343,7 @@ async function collectDisclosures(env, diagnostics) {
         category,
         title,
         receipt_no: receiptNo,
-        date: clean(item.rcept_dt),
+        date: isoDate(clean(item.rcept_dt)),
         is_revision: title.includes("정정") || clean(item.rm).includes("정"),
         note: clean(item.rm),
         link: receiptNo ? DART_VIEWER_URL + receiptNo : "",
@@ -459,24 +459,28 @@ async function analyze(env, disclosures, news, diagnostics) {
   };
 
   try {
-    const model = env.GEMINI_MODEL || "gemini-3.6-flash";
-    const response = await fetch(GEMINI_API_URL.replace("{model}", model), {
-      method: "POST",
-      headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: JSON.stringify(prompt) }] }],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-    });
-    if (!response.ok) {
-      diagnostics.push({ step: "gemini", status: "http_error", code: response.status });
-      return fallback;
+    const models = unique([env.GEMINI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash-lite"].filter(Boolean));
+    for (const model of models) {
+      for (const responseMode of ["json", "plain"]) {
+        const body = { contents: [{ role: "user", parts: [{ text: JSON.stringify(prompt) }] }] };
+        if (responseMode === "json") body.generationConfig = { responseMimeType: "application/json" };
+        const response = await fetch(GEMINI_API_URL.replace("{model}", model), {
+          method: "POST",
+          headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          diagnostics.push({ step: "gemini", status: "http_error", model, mode: responseMode, code: response.status, reason: safeError(await response.text()) });
+          continue;
+        }
+        const payload = await response.json();
+        const text = extractGeminiText(payload);
+        const normalized = normalizeGemini(JSON.parse(extractJson(text)));
+        diagnostics.push({ step: "gemini", status: Object.keys(normalized).length ? "success" : "empty_result", model, mode: responseMode, company_count: Object.keys(normalized).length });
+        return mergeAnalysis(fallback, normalized);
+      }
     }
-    const payload = await response.json();
-    const text = extractGeminiText(payload);
-    const normalized = normalizeGemini(JSON.parse(text));
-    diagnostics.push({ step: "gemini", status: Object.keys(normalized).length ? "success" : "empty_result", company_count: Object.keys(normalized).length });
-    return mergeAnalysis(fallback, normalized);
+    return fallback;
   } catch (_) {
     diagnostics.push({ step: "gemini", status: "exception", reason: safeError(_) });
     return fallback;
@@ -534,6 +538,20 @@ function mergeAnalysis(fallback, gemini) {
 
 function extractGeminiText(payload) {
   return (payload.candidates || []).flatMap((candidate) => ((candidate.content || {}).parts || []).map((part) => part.text || "")).join("\n").trim();
+}
+
+function extractJson(text) {
+  const value = String(text || "").trim();
+  if (value.startsWith("{") || value.startsWith("[")) return value;
+  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+  const objectStart = value.indexOf("{");
+  const objectEnd = value.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) return value.slice(objectStart, objectEnd + 1);
+  const arrayStart = value.indexOf("[");
+  const arrayEnd = value.lastIndexOf("]");
+  if (arrayStart >= 0 && arrayEnd > arrayStart) return value.slice(arrayStart, arrayEnd + 1);
+  return value;
 }
 
 function classifyDisclosure(title) {
@@ -686,6 +704,12 @@ function clean(value) {
   return String(value || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
 
+function isoDate(value) {
+  const text = clean(value);
+  if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  return text;
+}
+
 function cleanHtml(value) {
   return clean(String(value || "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<\/?b>/gi, ""));
 }
@@ -702,6 +726,10 @@ function dedupe(rows, keyFn) {
     seen.add(key);
     return true;
   });
+}
+
+function unique(rows) {
+  return [...new Set(rows)];
 }
 
 function mediaFromUrl(value) {
