@@ -6,6 +6,11 @@ compatibility_date = "2026-09-03"
 binding = "BRIEFING_KV"
 id = "YOUR_KV_NAMESPACE_ID"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "competitor-newsletter-db"
+database_id = "YOUR_D1_DATABASE_ID"
+
 # Secrets to set with `wrangler secret put NAME`:
 # DART_API_KEY
 # NAVER_API_HUB_CLIENT_ID

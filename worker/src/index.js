@@ -45,6 +45,7 @@ const COMPANY_PROFILES = {
 const IMPORTANT_KEYWORDS = ["기술이전", "라이선스", "임상", "품목허가", "계약", "중대재해", "투자판단", "합병", "분할", "취득", "처분", "유상증자", "전환사채"];
 const IMPORTANT_CATEGORIES = new Set(["사업/계약", "투자/M&A", "자금조달"]);
 const MAX_STORED_ITEMS = 500;
+const RETENTION_DAYS = 30;
 
 export default {
   async fetch(request, env) {
@@ -52,10 +53,10 @@ export default {
     try {
       if (request.method === "GET" && url.pathname === "/") return htmlResponse(renderPage());
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
-      if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await readJson(env, "archive:index", []));
+      if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
         const date = url.pathname.split("/").pop();
-        return jsonResponse(await readJson(env, `briefing:${date}`, emptyBriefing()));
+        return jsonResponse(await archiveBriefing(env, date));
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
       return new Response("Not found", { status: 404 });
@@ -73,6 +74,7 @@ async function refresh(request, env) {
 
   await env.BRIEFING_KV.put("lock:refresh", JSON.stringify({ started_at: new Date().toISOString() }), { expirationTtl: 300 });
   try {
+    if (env.DB) return await refreshWithD1(env);
     const previous = await latestBriefing(env);
     const diagnostics = [];
     const collectedDisclosures = await collectDisclosures(env, diagnostics);
@@ -123,7 +125,141 @@ async function requireUpdatePassword(request, env) {
 }
 
 async function latestBriefing(env) {
+  if (env.DB) return await latestBriefingFromD1(env);
   return await readJson(env, "briefing:latest", emptyBriefing());
+}
+
+async function archiveIndex(env) {
+  if (env.DB) return await archiveIndexFromD1(env);
+  return await readJson(env, "archive:index", []);
+}
+
+async function archiveBriefing(env, date) {
+  if (env.DB) return await archiveBriefingFromD1(env, date);
+  return await readJson(env, `briefing:${date}`, emptyBriefing());
+}
+
+async function refreshWithD1(env) {
+  const startedAt = new Date();
+  const diagnostics = [];
+  const collectedDisclosures = await collectDisclosures(env, diagnostics);
+  const collectedNews = await collectNews(env, diagnostics);
+  const analysis = await analyze(env, collectedDisclosures, collectedNews, diagnostics);
+  ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
+
+  const now = new Date();
+  const nowText = kstTimestamp(now);
+  const runId = `refresh:${now.toISOString()}`;
+  await cleanupOldData(env, now);
+
+  const added = {
+    disclosures: await countNewIds(env.DB, "disclosures", collectedDisclosures.map(disclosureKey)),
+    news: await countNewIds(env.DB, "news_articles", collectedNews.map(newsKey)),
+  };
+
+  const statements = [];
+  for (const item of collectedDisclosures) {
+    statements.push(env.DB.prepare(`INSERT INTO disclosures (id, company, category, title, receipt_no, disclosure_date, is_revision, note, link, score, important, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, note=excluded.note, link=excluded.link, score=excluded.score, important=excluded.important, last_seen_at=excluded.last_seen_at`)
+      .bind(disclosureKey(item), item.company, item.category, item.title, item.receipt_no, item.date, item.is_revision ? 1 : 0, item.note, item.link, item.score || 0, item.important ? 1 : 0, nowText, nowText));
+  }
+  for (const item of collectedNews) {
+    statements.push(env.DB.prepare(`INSERT INTO news_articles (id, company, category, title, summary, link, media, published_at, important, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
+      .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
+  }
+  if (Object.keys(analysis).length) {
+    statements.push(env.DB.prepare("INSERT INTO ai_briefings (id, briefing_date, created_at, scope, payload_json) VALUES (?, ?, ?, ?, ?)")
+      .bind(`ai:${now.toISOString()}`, kstDateKey(now), nowText, "refresh_new_items", JSON.stringify({ analysis, disclosure_ids: collectedDisclosures.map(disclosureKey), news_ids: collectedNews.map(newsKey) })));
+  }
+  statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
+  if (statements.length) await env.DB.batch(statements);
+
+  const briefing = await latestBriefingFromD1(env, nowText, diagnostics);
+  return jsonResponse({ ok: true, briefing, added });
+}
+
+async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
+  const cutoff = kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
+  const disclosureRows = await env.DB.prepare("SELECT * FROM disclosures WHERE first_seen_at >= ? ORDER BY disclosure_date DESC, company ASC").bind(cutoff).all();
+  const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
+  const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
+  const news = (newsRows.results || []).map(newsFromDb);
+  return {
+    ok: true,
+    date: kstDateKey(new Date()),
+    updated_at: updatedAt || (await latestRefreshTime(env)) || "",
+    disclosures,
+    news,
+    analysis: {},
+    diagnostics,
+    summary: {
+      disclosure_count: disclosures.length,
+      news_count: news.length,
+      important_disclosure_count: disclosures.filter((item) => item.important).length,
+      important_news_count: news.filter((item) => item.important).length,
+    },
+  };
+}
+
+async function latestRefreshTime(env) {
+  const row = await env.DB.prepare("SELECT finished_at FROM refresh_runs WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1").first();
+  return row ? row.finished_at : "";
+}
+
+async function archiveIndexFromD1(env) {
+  const rows = await env.DB.prepare(`SELECT r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
+    FROM newsletter_runs r LEFT JOIN newsletter_items i ON r.id = i.run_id
+    WHERE r.sent_at IS NOT NULL
+    GROUP BY r.id
+    ORDER BY r.sent_at DESC
+    LIMIT 120`).all();
+  return (rows.results || []).map((row) => ({ date: row.date, updated_at: row.updated_at, subject: row.subject || `${row.date} 뉴스레터`, disclosure_count: row.disclosure_count || 0, news_count: row.news_count || 0 }));
+}
+
+async function archiveBriefingFromD1(env, date) {
+  const run = await env.DB.prepare("SELECT * FROM newsletter_runs WHERE newsletter_date = ? AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 1").bind(date).first();
+  if (!run) return emptyBriefing();
+  const items = await env.DB.prepare("SELECT * FROM newsletter_items WHERE run_id = ? ORDER BY company ASC, title ASC").bind(run.id).all();
+  return { ok: true, date, updated_at: run.sent_at, newsletter: { subject: run.subject, html: run.html, summary: parseJson(run.summary_json, {}) }, items: items.results || [], disclosures: [], news: [], analysis: parseJson(run.summary_json, {}), summary: { disclosure_count: 0, news_count: 0, important_disclosure_count: 0, important_news_count: 0 } };
+}
+
+async function cleanupOldData(env, now) {
+  const cutoff = kstTimestamp(addDays(now, -RETENTION_DAYS));
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM disclosures WHERE first_seen_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM news_articles WHERE first_seen_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM ai_briefings WHERE created_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM newsletter_items WHERE run_id IN (SELECT id FROM newsletter_runs WHERE created_at < ?)").bind(cutoff),
+    env.DB.prepare("DELETE FROM newsletter_runs WHERE created_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM refresh_runs WHERE started_at < ?").bind(cutoff),
+  ]);
+}
+
+async function countNewIds(db, table, ids) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!uniqueIds.length) return 0;
+  let count = 0;
+  for (const id of uniqueIds) {
+    const row = await db.prepare(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`).bind(id).first();
+    if (!row) count += 1;
+  }
+  return count;
+}
+
+function disclosureFromDb(row) {
+  return { type: "disclosure", company: row.company, category: row.category, title: row.title, receipt_no: row.receipt_no, date: row.disclosure_date, is_revision: !!row.is_revision, note: row.note, link: row.link, score: row.score || 0, important: !!row.important };
+}
+
+function newsFromDb(row) {
+  return { type: "news", company: row.company, category: row.category, title: row.title, summary: row.summary, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important };
+}
+
+function parseJson(value, fallback) {
+  try { return JSON.parse(value || ""); } catch (_) { return fallback; }
 }
 
 async function saveBriefing(env, briefing) {
@@ -176,7 +312,13 @@ async function collectDisclosures(env, diagnostics) {
 
     let payload;
     try {
-      payload = await fetchJson(url.toString(), { redirect: "manual" });
+      payload = await fetchJson(url.toString(), {
+        redirect: "manual",
+        headers: {
+          "Accept": "application/json,text/plain,*/*",
+          "User-Agent": "Mozilla/5.0 competitor-newsletter/1.0",
+        },
+      });
     } catch (_) {
       diagnostics.push({ step: "dart", company: company.name, status: "request_error", reason: safeError(_) });
       continue;
@@ -718,8 +860,7 @@ function renderPage() {
 
     function filtered(rows) {
       return rows.filter((item) => {
-        const analysis = briefing.analysis?.[item.company] || {};
-        const haystack = text([item.company, item.category, item.title, item.summary, analysis.today_summary, analysis.news_summary, analysis.important_point].join(' '));
+        const haystack = text([item.company, item.category, item.title, item.summary, item.media].join(' '));
         return (!state.company || item.company === state.company) && (!state.category || item.category === state.category) && (!state.search || haystack.includes(state.search));
       });
     }
@@ -735,8 +876,7 @@ function renderPage() {
     function renderNews() {
       const rows = filtered(briefing.news || []);
       $('news').innerHTML = rows.length ? rows.map((item) => {
-        const analysis = briefing.analysis?.[item.company] || {};
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2><p class="body">' + esc(item.summary || '') + '</p><div class="point"><strong>요약</strong><br>' + esc(analysis.today_summary || '') + '<br><br><strong>주요 내용</strong><br>' + esc(analysis.news_summary || item.summary || '') + '</div></article>';
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2><p class="body"><strong>주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
       }).join('') : '<div class="empty">조건에 맞는 뉴스가 없습니다.</div>';
     }
 
