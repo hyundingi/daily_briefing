@@ -151,10 +151,10 @@ async function refreshWithD1(env) {
   const runId = `refresh:${now.toISOString()}`;
   await cleanupOldData(env, now);
 
-  const added = {
-    disclosures: await countNewIds(env.DB, "disclosures", collectedDisclosures.map(disclosureKey)),
-    news: await countNewIds(env.DB, "news_articles", collectedNews.map(newsKey)),
-  };
+  const newDisclosures = await filterNewRows(env.DB, "disclosures", collectedDisclosures, disclosureKey);
+  const newNews = await filterNewRows(env.DB, "news_articles", collectedNews, newsKey);
+  const added = { disclosures: newDisclosures.length, news: newNews.length };
+  const analysis = added.disclosures || added.news ? await analyze(env, newDisclosures, newNews, diagnostics) : {};
 
   const statements = [];
   for (const item of collectedDisclosures) {
@@ -168,6 +168,10 @@ async function refreshWithD1(env) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
       .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
+  }
+  if (hasGeminiAnalysis(analysis)) {
+    statements.push(env.DB.prepare("INSERT INTO ai_briefings (id, briefing_date, created_at, scope, payload_json) VALUES (?, ?, ?, ?, ?)")
+      .bind(`ai:${now.toISOString()}`, kstDateKey(now), nowText, "manual_refresh_new_items", JSON.stringify({ analysis, disclosure_ids: newDisclosures.map(disclosureKey), news_ids: newNews.map(newsKey) })));
   }
   statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
@@ -183,13 +187,14 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
   const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
   const news = (newsRows.results || []).map(newsFromDb);
+  const analysis = await latestAnalysisFromD1(env);
   return {
     ok: true,
     date: kstDateKey(new Date()),
     updated_at: updatedAt || (await latestRefreshTime(env)) || "",
     disclosures,
     news,
-    analysis: {},
+    analysis,
     diagnostics,
     summary: {
       disclosure_count: disclosures.length,
@@ -205,6 +210,19 @@ async function latestRefreshTime(env) {
   if (row) return row.finished_at;
   const seeded = await env.DB.prepare("SELECT MAX(last_seen_at) AS updated_at FROM (SELECT last_seen_at FROM disclosures UNION ALL SELECT last_seen_at FROM news_articles)").first();
   return seeded ? seeded.updated_at || "" : "";
+}
+
+async function latestAnalysisFromD1(env) {
+  const rows = await env.DB.prepare("SELECT payload_json FROM ai_briefings ORDER BY created_at DESC LIMIT 20").all();
+  const merged = {};
+  for (const row of rows.results || []) {
+    const payload = parseJson(row.payload_json, {});
+    const analysis = payload.analysis || payload.companies || payload;
+    for (const [company, item] of Object.entries(analysis || {})) {
+      if (!merged[company] && item && item.generated_by === "gemini") merged[company] = item;
+    }
+  }
+  return merged;
 }
 
 async function archiveIndexFromD1(env) {
@@ -239,15 +257,20 @@ async function cleanupOldData(env, now) {
   ]);
 }
 
-async function countNewIds(db, table, ids) {
-  const uniqueIds = [...new Set(ids.filter(Boolean))];
-  if (!uniqueIds.length) return 0;
-  let count = 0;
-  for (const id of uniqueIds) {
-    const row = await db.prepare(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`).bind(id).first();
-    if (!row) count += 1;
+async function filterNewRows(db, table, rows, keyFn) {
+  const uniqueRows = dedupe(rows || [], keyFn);
+  const result = [];
+  for (const row of uniqueRows) {
+    const id = keyFn(row);
+    if (!id) continue;
+    const existing = await db.prepare(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`).bind(id).first();
+    if (!existing) result.push(row);
   }
-  return count;
+  return result;
+}
+
+function hasGeminiAnalysis(analysis) {
+  return Object.values(analysis || {}).some((item) => item && item.generated_by === "gemini");
 }
 
 function disclosureFromDb(row) {
@@ -901,7 +924,8 @@ function renderPage() {
 
     function filtered(rows) {
       return rows.filter((item) => {
-        const haystack = text([item.company, item.category, item.title, item.summary, item.media].join(' '));
+        const analysis = briefing.analysis?.[item.company] || {};
+        const haystack = text([item.company, item.category, item.title, item.summary, item.media, analysis.today_summary, analysis.news_summary, analysis.important_point].join(' '));
         return (!state.company || item.company === state.company) && (!state.category || item.category === state.category) && (!state.search || haystack.includes(state.search));
       });
     }
@@ -910,15 +934,24 @@ function renderPage() {
       const rows = filtered(briefing.disclosures || []);
       $('disclosures').innerHTML = rows.length ? rows.map((item) => {
         const analysis = briefing.analysis?.[item.company] || {};
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '기타') + '</span>' + (item.important ? '<span class="badge important">💡 공시 우선 확인</span>' : '') + '</div><div class="date">' + esc(item.date) + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2><div class="point"><strong>중요 포인트</strong><br>' + esc(analysis.important_point || '원문에서 실제 변경 내용과 후속 영향 여부를 확인해야 합니다.') + '</div></article>';
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '기타') + '</span>' + (item.important ? '<span class="badge important">💡 공시 우선 확인</span>' : '') + '</div><div class="date">' + esc(item.date) + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(analysis, 'disclosure') + '</article>';
       }).join('') : '<div class="empty">조건에 맞는 공시가 없습니다.</div>';
     }
 
     function renderNews() {
       const rows = filtered(briefing.news || []);
       $('news').innerHTML = rows.length ? rows.map((item) => {
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2><p class="body"><strong>주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
+        const analysis = briefing.analysis?.[item.company] || {};
+        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(analysis, 'news') + '<p class="body"><strong>기사 주요 내용</strong><br>' + esc(item.summary || '') + '</p></article>';
       }).join('') : '<div class="empty">조건에 맞는 뉴스가 없습니다.</div>';
+    }
+
+    function renderAiBlock(analysis, type) {
+      if (!analysis || analysis.generated_by !== 'gemini') return '';
+      const first = type === 'news' ? (analysis.news_summary || analysis.today_summary || '') : (analysis.today_summary || '');
+      const second = analysis.important_point || '';
+      const content = [first, second].filter(Boolean).join('<br>');
+      return content ? '<div class="point"><strong>AI 요약</strong><br>' + esc(content) + '</div>' : '';
     }
 
     function renderArchive() {
