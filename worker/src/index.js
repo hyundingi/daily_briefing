@@ -1,4 +1,7 @@
 import { strFromU8, unzipSync } from "fflate";
+import { APP_JS } from "./app.js";
+import { renderPage as renderReactPage } from "./page.js";
+import { APP_CSS } from "./styles.js";
 
 const DART_VIEWER_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=";
 const DART_LIST_URL = "https://opendart.fss.or.kr/api/list.json";
@@ -55,7 +58,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/") return htmlResponse(renderPage());
+      if (request.method === "GET" && url.pathname === "/") return htmlResponse(renderReactPage());
+      if (request.method === "GET" && url.pathname === "/assets/app.js") return javascriptResponse(APP_JS);
+      if (request.method === "GET" && url.pathname === "/assets/styles.css") return cssResponse(APP_CSS);
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
       if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
@@ -1270,6 +1275,18 @@ function htmlResponse(html) {
   });
 }
 
+function cssResponse(css) {
+  return new Response(css, {
+    headers: { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+function javascriptResponse(script) {
+  return new Response(script, {
+    headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 function emptyBriefing() {
   return {
     ok: true,
@@ -1361,258 +1378,8 @@ function topicWords(titles) {
 }
 
 function renderPage() {
-  const companies = TARGET_COMPANIES.map((item) => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
-  return `<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>경쟁사 브리핑</title>
-  <style>
-    :root { --bg:#f6f4ef; --paper:#fffdf8; --ink:#1f2d3d; --muted:#756c61; --line:#eee7db; --soft:#f1eee7; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial,'Malgun Gothic','Apple SD Gothic Neo',sans-serif; }
-    main { max-width:1120px; margin:0 auto; padding:34px 18px 56px; }
-    header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:20px; }
-    h1 { margin:0 0 8px; font-size:34px; letter-spacing:-.03em; }
-    .sub { margin:0; color:var(--muted); line-height:1.7; }
-    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-    button, select, input { border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink); font:inherit; }
-    button { padding:11px 16px; cursor:pointer; font-weight:800; }
-    button.primary { background:#1f2d3d; color:#fff; border-color:#1f2d3d; }
-    button:disabled { opacity:.55; cursor:not-allowed; }
-    select, input { padding:11px 14px; min-height:44px; }
-    .filters { display:grid; grid-template-columns:190px 190px 1fr; gap:10px; padding:16px; background:var(--soft); border-radius:22px; margin:18px 0; }
-    .tabs { display:flex; gap:8px; margin:20px 0 16px; }
-    .tab.active { background:#1f2d3d; color:#fff; }
-    .summary { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin:16px 0; }
-    .metric, .card { background:var(--paper); border-radius:20px; box-shadow:0 8px 24px rgba(45,37,25,.05); }
-    .metric { padding:16px 18px; color:var(--muted); font-weight:800; }
-    .metric strong { display:block; margin-top:6px; color:var(--ink); font-size:28px; }
-    .card { padding:20px 22px; margin-bottom:14px; }
-    .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:10px; }
-    .chip { display:inline-block; padding:7px 12px; border-radius:999px; color:#fff; font-weight:800; font-size:14px; }
-    .badge { display:inline-block; margin-left:6px; padding:6px 10px; border-radius:999px; background:#f3efe7; color:var(--muted); font-weight:800; font-size:13px; }
-    .important { background:#fff3d5; color:#8a5b00; }
-    .date { color:#897f73; font-size:13px; white-space:nowrap; }
-    h2 { margin:6px 0 8px; font-size:20px; line-height:1.45; letter-spacing:-.015em; }
-    a { color:var(--ink); text-decoration:none; }
-    a:hover { text-decoration:underline; }
-    .body { color:#4d5966; line-height:1.75; }
-    .point { margin-top:12px; padding:13px 15px; border-radius:15px; background:#fff7eb; color:#4d5966; line-height:1.7; }
-    .panel { display:none; }
-    .panel.active { display:block; }
-    .empty { padding:28px; text-align:center; color:#8b8378; }
-    .archive-row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
-    .newsletter-view { margin-top:14px; }
-    .newsletter-frame { width:100%; min-height:760px; border:0; border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(45,37,25,.05); }
-    .admin-actions { display:none; margin:10px 0 18px; padding:12px 14px; border-radius:18px; background:#f7f2ea; color:var(--muted); align-items:center; justify-content:space-between; gap:12px; }
-    .admin-actions.open { display:flex; }
-    .admin-actions p { margin:0; font-size:13px; }
-    @media (max-width:760px) { header { display:block; } .actions { justify-content:flex-start; margin-top:16px; } .filters, .summary { grid-template-columns:1fr; } .top, .archive-row { display:block; } }
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <div>
-        <h1>경쟁사 브리핑</h1>
-        <p class="sub">저장된 공시와 뉴스를 먼저 보여주고, 업데이트는 뒤에서 안전하게 실행합니다.</p>
-      </div>
-      <div class="actions">
-        <span id="status" class="sub">불러오는 중...</span>
-      </div>
-    </header>
-    <section class="summary">
-      <div class="metric">오늘 공시<strong id="count-disclosures">0</strong></div>
-      <div class="metric">오늘 뉴스<strong id="count-news">0</strong></div>
-    </section>
-    <section id="admin-actions" class="admin-actions" aria-hidden="true">
-      <p>관리자 도구입니다. 요약 없는 최신 항목 10건만 AI 요약으로 채웁니다.</p>
-      <button id="summarize" type="button">AI 요약 채우기</button>
-    </section>
-    <section class="filters">
-      <select id="company"><option value="">전체 기업</option>${companies}</select>
-      <select id="category"><option value="">전체 카테고리</option></select>
-      <input id="search" type="search" placeholder="회사명, 제목, 요약 검색">
-    </section>
-    <nav class="tabs">
-      <button class="tab active" data-tab="disclosures" type="button">공시</button>
-      <button class="tab" data-tab="news" type="button">뉴스</button>
-      <button class="tab" data-tab="archive" type="button">아카이브</button>
-    </nav>
-    <section id="disclosures" class="panel active"></section>
-    <section id="news" class="panel"></section>
-    <section id="archive" class="panel"></section>
-  </main>
-  <script>
-    const colors = ${JSON.stringify(COMPANY_COLORS)};
-    let briefing = ${JSON.stringify(emptyBriefing())};
-    let archive = [];
-    const state = { tab:'disclosures', company:'', category:'', search:'' };
-    const $ = (id) => document.getElementById(id);
-    const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-    const text = (value) => String(value ?? '').toLowerCase();
-    const norm = (value) => String(value ?? '').replace(/[^0-9A-Za-z가-힣]/g, '').toLowerCase();
-
-    async function load() {
-      const [latestRes, archiveRes] = await Promise.all([fetch('/api/latest'), fetch('/api/archive')]);
-      briefing = await latestRes.json();
-      archive = await archiveRes.json();
-      render();
-    }
-
-    function render() {
-      $('status').textContent = briefing.updated_at ? '데이터 업데이트: ' + briefing.updated_at : '저장된 브리핑 없음';
-      $('count-disclosures').textContent = todayDisclosures().length;
-      $('count-news').textContent = todayNews().length;
-      renderCategoryOptions();
-      renderDisclosures();
-      renderNews();
-      renderArchive();
-    }
-
-    function todayKey() {
-      return briefing.date || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
-    }
-
-    function todayDisclosures() {
-      const date = todayKey();
-      return (briefing.disclosures || []).filter((item) => String(item.date || '').slice(0, 10) === date);
-    }
-
-    function todayNews() {
-      const date = todayKey();
-      return (briefing.news || []).filter((item) => String(item.published_at || '').slice(0, 10) === date);
-    }
-
-    function renderCategoryOptions() {
-      const rows = state.tab === 'news' ? briefing.news || [] : state.tab === 'disclosures' ? briefing.disclosures || [] : [];
-      const values = [...new Set(rows.map((item) => item.category).filter(Boolean))].sort();
-      $('category').innerHTML = '<option value="">전체 카테고리</option>' + values.map((value) => '<option value="' + esc(value) + '" ' + (state.category === value ? 'selected' : '') + '>' + esc(value) + '</option>').join('');
-    }
-
-    function filtered(rows) {
-      return rows.filter((item) => {
-        const ai = itemAi(item);
-        const haystack = text([item.company, item.category, item.title, item.summary, item.media, ai.summary, ai.key_points, ai.caution].join(' '));
-        return (!state.company || item.company === state.company) && (!state.category || item.category === state.category) && (!state.search || haystack.includes(state.search));
-      });
-    }
-
-    function renderDisclosures() {
-      const rows = filtered(briefing.disclosures || []);
-      $('disclosures').innerHTML = rows.length ? rows.map((item) => {
-        const ai = itemAi(item);
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '기타') + '</span>' + (item.important ? '<span class="badge important">💡 공시 우선 확인</span>' : '') + '</div><div class="date">' + esc(item.date) + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '</article>';
-      }).join('') : '<div class="empty">조건에 맞는 공시가 없습니다.</div>';
-    }
-
-    function renderNews() {
-      const rows = filtered(briefing.news || []);
-      $('news').innerHTML = rows.length ? rows.map((item) => {
-        const ai = itemAi(item);
-        return '<article class="card"><div class="top"><div><span class="chip" style="background:' + esc(colors[item.company] || '#6f7f91') + '">' + esc(item.company) + '</span><span class="badge">' + esc(item.category || '일반뉴스') + '</span>' + (item.important ? '<span class="badge important">주요 뉴스</span>' : '') + '</div><div class="date">' + esc(item.published_at || '') + '</div></div><h2><a href="' + esc(item.link) + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h2>' + renderAiBlock(ai) + '<p class="body"><strong>기사 원문 일부</strong><br>' + esc(item.summary || '') + '</p></article>';
-      }).join('') : '<div class="empty">조건에 맞는 뉴스가 없습니다.</div>';
-    }
-
-    function itemAi(item) {
-      const type = item.type === 'disclosure' ? 'disclosure' : 'news';
-      const id = type === 'disclosure' ? (item.receipt_no || (item.company + ':' + norm(item.title) + ':' + item.date)) : (item.company + ':' + norm(item.title));
-      return briefing.item_summaries?.[type + ':' + id] || {};
-    }
-
-    function renderAiBlock(ai) {
-      if (!ai || ai.generated_by !== 'gemini') return '';
-      const lines = [ai.summary, ai.key_points, ai.caution].flatMap(aiLines).filter(Boolean).map(esc);
-      return lines.length ? '<div class="point"><strong>AI 요약</strong><br>' + lines.join('<br>') + '</div>' : '';
-    }
-
-    function aiLines(value) {
-      return String(value || '').replace(/<br\\s*\\/?>/gi, '\\n').split(/\\n+/).map((line) => line.trim()).filter(Boolean);
-    }
-
-    function renderArchive() {
-      $('archive').innerHTML = archive.length ? archive.map((item) => '<article class="card archive-row"><div><h2>' + esc(item.date) + ' 브리핑</h2><p class="body">공시 ' + esc(item.disclosure_count) + '건 · 뉴스 ' + esc(item.news_count) + '건</p></div><button type="button" data-date="' + esc(item.date) + '">보기</button></article>').join('') : '<div class="empty">저장된 아카이브가 없습니다.</div>';
-      document.querySelectorAll('[data-date]').forEach((button) => {
-        button.onclick = () => showNewsletterArchive(button.dataset.date);
-      });
-    }
-
-    async function showNewsletterArchive(date) {
-      $('archive').innerHTML = '<div class="empty">뉴스레터를 불러오는 중...</div>';
-      const response = await fetch('/api/archive/' + date);
-      const data = await response.json();
-      const html = data.newsletter?.html || '';
-      if (!html) {
-        $('archive').innerHTML = '<article class="card"><button type="button" id="archive-back">목록으로</button><div class="empty">저장된 뉴스레터 전문이 없습니다.</div></article>';
-        $('archive-back').onclick = renderArchive;
-        return;
-      }
-      $('archive').innerHTML = '<article class="card newsletter-view"><div class="top"><div><h2>' + esc(data.newsletter?.subject || date + ' 브리핑') + '</h2><p class="body">' + esc(data.updated_at || '') + ' 발송 뉴스레터</p></div><button type="button" id="archive-back">목록으로</button></div><iframe id="newsletter-frame" class="newsletter-frame" title="뉴스레터 전문"></iframe></article>';
-      $('archive-back').onclick = renderArchive;
-      $('newsletter-frame').srcdoc = html;
-    }
-
-    function setTab(tab) {
-      state.tab = tab;
-      state.category = '';
-      document.querySelectorAll('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
-      document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === tab));
-      renderCategoryOptions();
-    }
-
-    document.querySelectorAll('.tab').forEach((button) => button.onclick = () => { setTab(button.dataset.tab); render(); });
-    $('company').onchange = (event) => { state.company = event.target.value; render(); };
-    $('category').onchange = (event) => { state.category = event.target.value; render(); };
-    $('search').oninput = (event) => { state.search = event.target.value.trim().toLowerCase(); render(); };
-    document.addEventListener('keydown', (event) => {
-      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'a') {
-        const panel = $('admin-actions');
-        panel.classList.toggle('open');
-        panel.setAttribute('aria-hidden', panel.classList.contains('open') ? 'false' : 'true');
-      }
-    });
-    $('summarize').onclick = async () => {
-      const button = $('summarize');
-      button.disabled = true;
-      button.textContent = '요약 생성 중...';
-      $('status').textContent = '요약 없는 최신 항목 10건을 AI가 정리하는 중입니다.';
-      try {
-        const password = prompt('업데이트 비밀번호를 입력해주세요.') || '';
-        if (!password) throw new Error('업데이트 비밀번호가 입력되지 않았습니다.');
-        const response = await fetch('/api/summarize-missing?limit=10', { method:'POST', headers:{ 'x-update-password': password } });
-        if (response.status === 409) {
-          alert('AI 요약 생성이 이미 진행 중입니다. 잠시 후 다시 확인해주세요.');
-        } else if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          alert(errorBody.error || 'AI 요약 생성에 실패했습니다.');
-        } else {
-          const data = await response.json();
-          await load();
-          const geminiStatus = (data.diagnostics || []).filter((item) => item.step === 'gemini_item').map((item) => [item.status, item.code, item.reason].filter(Boolean).join(' / ')).join('\\n');
-          if ((data.attempted || 0) === 0) {
-            alert('AI 요약을 채울 항목이 없습니다.');
-          } else if ((data.saved || 0) === 0) {
-            alert('AI 요약 저장 0건입니다.\\n시도 항목: ' + (data.attempted || 0) + '건\\n' + (geminiStatus ? 'Gemini 상태:\\n' + geminiStatus : 'Gemini 응답 진단 정보가 없습니다.'));
-          } else {
-            alert('AI 요약 완료: ' + (data.saved || 0) + '건 저장, 남은 항목 ' + (data.remaining || 0) + '건');
-          }
-        }
-      } catch (error) {
-        alert(error.message || 'AI 요약 생성에 실패했습니다.');
-      } finally {
-        button.disabled = false;
-        button.textContent = 'AI 요약 채우기';
-        render();
-      }
-    };
-    load().catch((error) => { $('status').textContent = '데이터를 불러오지 못했습니다.'; console.error(error); });
-  </script>
-</body>
-</html>`;
+  return renderReactPage();
 }
-
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }

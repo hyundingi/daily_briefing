@@ -1,6 +1,6 @@
 # Competitor Newsletter
 
-경쟁사 10개사의 DART 공시와 최신 뉴스를 수집해 웹페이지와 뉴스레터로 확인하는 프로젝트입니다.
+경쟁사 10개사의 DART 공시와 최신 뉴스를 수집해 웹페이지와 뉴스레터로 확인하고, 경영기획팀 업무 지표를 한 화면에 모으는 대시보드 프로젝트입니다.
 
 현재 운영 중심은 Cloudflare Worker + D1입니다. Worker가 웹페이지, 데이터 수집, 뉴스레터 HTML 생성을 담당하고, GitHub Actions는 아침 메일 발송만 담당합니다.
 
@@ -9,15 +9,16 @@
 ### 1. 웹페이지
 
 - 주소: https://competitor-newsletter.hyundingi.workers.dev
-- Cloudflare Worker가 페이지를 렌더링합니다.
+- Cloudflare Worker가 React 기반 대시보드를 제공합니다.
 - D1 DB에 저장된 최근 30일 공시와 뉴스를 보여줍니다.
-- 공시 / 뉴스 / 아카이브 탭이 분리되어 있습니다.
-- 기업명, 카테고리, 검색어로 필터링할 수 있습니다.
+- 좌측 navbar에서 대시보드, AI 인텔리전스, 공시, 뉴스, 아카이브, 재무 비교, 손익 시뮬레이터, 일정·국책과제 영역을 전환합니다.
+- 공시 / 뉴스 탭에서는 기업명 선택과 검색어로 필터링할 수 있습니다.
 - Cloudflare Worker cron이 30분마다 새 공시/뉴스를 수집해 D1에 누적 저장합니다.
 - 화면 상단에는 마지막 데이터 업데이트 시간이 표시됩니다.
 - 새로 추가된 공시/뉴스가 있을 때만 Gemini 요약을 생성합니다.
 - 관리자 숨김 메뉴에서 AI 요약 채우기를 실행하면 이미 저장된 항목 중 요약이 없는 최신 10건만 Gemini로 보강합니다.
-- Gemini 요약이 있으면 페이지 카드에도 `AI 요약`으로 표시합니다.
+- Gemini 요약이 있으면 페이지 카드에도 표시합니다.
+- 현재 대시보드의 재무 비교, 실적 관리, 일정, 국책과제 영역은 UI 자리만 먼저 만든 상태이며, 실제 내부 데이터 연동 전에는 접근제어를 먼저 적용하는 것을 권장합니다.
 
 ### 2. 뉴스레터
 
@@ -128,6 +129,37 @@ Cloudflare Worker의 핵심 코드입니다.
 - `/api/newsletter/latest-unsent`: 아직 발송되지 않은 뉴스레터 HTML 조회
 - `/api/newsletter/mark-sent`: 메일 발송 성공 후 발송 완료 기록
 - `/api/newsletter/import-archive`: 기존 HTML 아카이브를 D1에 수동 적재
+
+### `worker/src/page.js`
+
+React 앱을 띄우는 HTML shell입니다.
+
+- `<div id="root">`를 제공합니다.
+- React와 ReactDOM을 CDN에서 불러옵니다.
+- 화면 스크립트(`/assets/app.js`)와 스타일(`/assets/styles.css`)을 연결합니다.
+
+### `worker/src/app.js`
+
+React 프론트엔드 화면 코드입니다.
+
+- 좌측 navbar
+- 메인 대시보드 KPI 카드
+- 경쟁사 AI 인텔리전스 카드
+- 공시/뉴스 탭, 기업 필터, 검색창
+- 뉴스레터 아카이브 보기
+- 손익 시뮬레이터 UI
+- 일정·국책과제 placeholder
+- 관리자 숨김 메뉴의 AI 요약 채우기
+
+현재는 별도 빌드 과정 없이 Worker가 `/assets/app.js`로 내려주는 React 코드입니다. 화면 규모가 더 커지면 Vite 기반 정식 React 프로젝트로 분리할 수 있습니다.
+
+### `worker/src/styles.js`
+
+대시보드 CSS입니다.
+
+- 회사 메인 컬러 계열을 사용합니다.
+- 넓은 배경은 밝은 `#E6ADAA`, `#F4D8D6`, `#F8E8E7` 계열을 사용하고, 진한 `#94403C`는 포인트 색으로 사용합니다.
+- 유지보수를 위해 레이아웃, 카드, navbar, 탭, 검색, 뉴스 티커 스타일을 한 파일에 모아두었습니다.
 
 ### `worker/migrations/0001_init.sql`
 
