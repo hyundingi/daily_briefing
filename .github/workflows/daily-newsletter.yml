@@ -43,6 +43,8 @@ jobs:
         env:
           WORKER_BASE_URL: ${{ vars.WORKER_BASE_URL || 'https://competitor-newsletter.hyundingi.workers.dev' }}
           WORKER_UPDATE_PASSWORD: ${{ secrets.WORKER_UPDATE_PASSWORD || secrets.UPDATE_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}

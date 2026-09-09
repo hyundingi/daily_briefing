@@ -239,7 +239,7 @@ button { border: 0; cursor: pointer; }
   align-items: center;
   z-index: 10;
 }
-.ticker-track { display: inline-flex; gap: 34px; white-space: nowrap; animation: ticker 95s linear infinite; padding-left: 100%; }
+.ticker-track { display: inline-flex; gap: 34px; white-space: nowrap; animation: ticker 150s linear infinite; padding-left: 100%; }
 .ticker-item { font-size: 13px; font-weight: 800; opacity: 0.95; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 

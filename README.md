@@ -11,7 +11,7 @@
 - 주소: https://competitor-newsletter.hyundingi.workers.dev
 - Cloudflare Worker가 React 기반 대시보드를 제공합니다.
 - D1 DB에 저장된 최근 30일 공시와 뉴스를 보여줍니다.
-- 좌측 navbar에서 대시보드, AI 인텔리전스, 공시, 뉴스, 아카이브, 재무 비교, 손익 시뮬레이터, 일정·국책과제 영역을 전환합니다.
+- 좌측 navbar에서 대시보드, 재무비교, 손익, 자금현황, 일정, 공시, 뉴스 영역을 전환합니다.
 - 공시 / 뉴스 탭에서는 기업명 선택과 검색어로 필터링할 수 있습니다.
 - Cloudflare Worker cron이 30분마다 새 공시/뉴스를 수집해 D1에 누적 저장합니다.
 - 화면 상단에는 마지막 데이터 업데이트 시간이 표시됩니다.
@@ -28,7 +28,7 @@
 - GitHub Actions는 Worker에서 생성된 미발송 HTML을 받아 SMTP 메일만 발송합니다.
 - 발송 성공 후 GitHub Actions가 Worker에 발송 완료를 알려 D1의 `newsletter_runs.sent_at`을 기록합니다.
 - 새 공시 또는 새 뉴스가 없으면 뉴스레터를 생성하거나 발송하지 않습니다.
-- 아카이브 탭은 “날짜별 전체 데이터”가 아니라 “발송된 뉴스레터 보관함”으로 사용합니다.
+- 뉴스레터 아카이브는 별도 주 메뉴가 아니라 상단 버튼으로 접근하며, “날짜별 전체 데이터”가 아니라 “발송된 뉴스레터 보관함”으로 사용합니다.
 
 ### 3. AI 요약
 
@@ -144,10 +144,11 @@ React 프론트엔드 화면 코드입니다.
 
 - 좌측 navbar
 - 메인 대시보드 KPI 카드
-- 경쟁사 AI 인텔리전스 카드
+- 오늘의 경쟁사 브리핑 카드
 - 공시/뉴스 탭, 기업 필터, 검색창
-- 뉴스레터 아카이브 보기
-- 손익 시뮬레이터 UI
+- 상단 뉴스레터 아카이브 버튼
+- 손익 표 UI
+- 자금현황 카드
 - 일정·국책과제 placeholder
 - 관리자 숨김 메뉴의 AI 요약 채우기
 
@@ -225,6 +226,8 @@ Cloudflare Worker에 아래 secrets가 필요합니다.
 GitHub 뉴스레터 발송에는 아래 secrets가 필요합니다.
 
 - `WORKER_UPDATE_PASSWORD`: Worker의 `UPDATE_PASSWORD`와 같은 값. 이미 `UPDATE_PASSWORD`라는 이름으로 GitHub Secret을 넣었다면 그것도 fallback으로 사용합니다.
+- `CF_ACCESS_CLIENT_ID`: Cloudflare Access로 Worker를 보호한 뒤 GitHub Actions가 Worker API를 호출하기 위한 Service Token ID입니다.
+- `CF_ACCESS_CLIENT_SECRET`: 위 Service Token의 Secret입니다.
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USERNAME`

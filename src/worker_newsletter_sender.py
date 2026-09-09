@@ -29,9 +29,19 @@ def worker_password() -> str:
     return value
 
 
+def add_cloudflare_access_headers(headers: dict[str, str]) -> None:
+    """Cloudflare Access로 보호된 Worker를 GitHub Actions에서 호출할 때 사용합니다."""
+    client_id = env_value("CF_ACCESS_CLIENT_ID")
+    client_secret = env_value("CF_ACCESS_CLIENT_SECRET")
+    if client_id and client_secret:
+        headers["CF-Access-Client-Id"] = client_id
+        headers["CF-Access-Client-Secret"] = client_secret
+
+
 def worker_request(method: str, path: str, **kwargs) -> requests.Response:
     headers = kwargs.pop("headers", {})
     headers["x-update-password"] = worker_password()
+    add_cloudflare_access_headers(headers)
     response = requests.request(method, worker_base_url() + path, headers=headers, timeout=180, **kwargs)
     if not response.ok:
         raise RuntimeError(f"Worker 요청 실패: {method} {path} {response.status_code} {response.text[:500]}")
