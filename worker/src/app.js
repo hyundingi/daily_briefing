@@ -17,7 +17,6 @@ export const APP_JS = String.raw`
   };
   var NAV_ITEMS = [
     ["dashboard", "⌂", "대시보드"],
-    ["intel", "✦", "AI 인텔리전스"],
     ["disclosures", "□", "공시"],
     ["news", "◌", "뉴스"],
     ["archive", "▤", "아카이브"],
@@ -111,7 +110,6 @@ export const APP_JS = String.raw`
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
         !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, todayDisclosures: todayDisclosures, todayNews: todayNews }) : null,
-        !loading && active === "intel" ? h(IntelligencePage, { disclosures: todayDisclosures, news: todayNews }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
@@ -159,7 +157,7 @@ export const APP_JS = String.raw`
       ),
       h("section", { className: "dashboard-grid" },
         h("div", { className: "stack" }, h(FinancePreview, null), h(DivisionPanel, null), h(SimulatorPanel, null)),
-        h("div", { className: "stack" }, h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }), h(SchedulePanel, null), h(GrantPanel, null))
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, null), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }))
       )
     );
   }
@@ -194,11 +192,7 @@ export const APP_JS = String.raw`
 
   function IntelligencePanel(props) {
     var items = sortItems(props.disclosures.concat(props.news)).slice(0, 5);
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "경쟁사 AI 인텔리전스", subtitle: "최근 공시와 뉴스의 AI 요약을 카드로 확인합니다.", pill: "실시간 갱신" }), h("div", { className: "intel-list" }, items.length ? items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "아직 표시할 공시나 뉴스가 없습니다."))));
-  }
-
-  function IntelligencePage(props) {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "AI 인텔리전스", subtitle: "오늘 들어온 공시와 뉴스 중 AI 요약이 있는 항목을 먼저 보여줍니다." }), h("div", { className: "data-list" }, sortItems(props.disclosures.concat(props.news)).map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }))));
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 경쟁사 브리핑", subtitle: "공시와 뉴스 탭에 쌓인 항목 중 최근 흐름만 대시보드에서 빠르게 봅니다.", pill: "요약 보기" }), h("div", { className: "intel-list" }, items.length ? items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "아직 표시할 공시나 뉴스가 없습니다."))));
   }
 
   function DataPage(props) {
@@ -214,8 +208,8 @@ export const APP_JS = String.raw`
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "뉴스레터 아카이브", subtitle: "실제로 발송했던 뉴스레터 전문을 다시 확인합니다." }), h("div", { className: "archive-list" }, props.archives.length ? props.archives.map(function (row) { var date = row.date || row.run_date || row.id; return h("div", { className: "archive-row", key: date }, h("div", null, h("strong", null, date), h("p", { className: "mini-text" }, "공시 " + (row.disclosure_count || 0) + "건 · 뉴스 " + (row.news_count || 0) + "건")), h("button", { className: "ghost-button", onClick: function () { openArchive(date); } }, "보기")); }) : h("div", { className: "empty" }, "저장된 뉴스레터가 없습니다.")), props.selectedArchive ? h("iframe", { className: "archive-frame", title: "newsletter archive", srcDoc: props.selectedArchive.html || "" }) : null));
   }
 
-  function SchedulePanel() {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 팀 타임라인", subtitle: "Google Calendar 연동 예정 영역입니다." }), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "09:30"), h("div", null, h("p", { className: "mini-title" }, "월간 실적 점검"), h("p", { className: "mini-text" }, "진행 중 일정은 배너로 강조할 예정입니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "14:00"), h("div", null, h("p", { className: "mini-title" }, "예산 조정 회의"), h("p", { className: "mini-text" }, "캘린더 권한 연결 후 실제 일정으로 대체됩니다.")))));
+  function SchedulePanel(props) {
+    return h("section", { className: props && props.featured ? "panel schedule-panel featured" : "panel schedule-panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 팀 타임라인", subtitle: "가장 먼저 확인해야 하는 일정 영역입니다. Google Calendar 연동 예정입니다.", pill: "오늘 일정" }), h("div", { className: "timeline-item active" }, h("span", { className: "time-badge" }, "09:30"), h("div", null, h("p", { className: "mini-title" }, "월간 실적 점검"), h("p", { className: "mini-text" }, "진행 중 일정은 배너로 강조할 예정입니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "14:00"), h("div", null, h("p", { className: "mini-title" }, "예산 조정 회의"), h("p", { className: "mini-text" }, "캘린더 권한 연결 후 실제 일정으로 대체됩니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "17:00"), h("div", null, h("p", { className: "mini-title" }, "마감 자료 취합"), h("p", { className: "mini-text" }, "보고 일정과 D-Day를 연결할 예정입니다.")))));
   }
 
   function GrantPanel() {

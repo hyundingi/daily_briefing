@@ -26,8 +26,9 @@ body {
   color: var(--ink);
   font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background:
-    radial-gradient(circle at 12% 8%, rgba(230, 173, 170, 0.48), transparent 32%),
-    linear-gradient(135deg, #fffaf9 0%, #f8e8e7 38%, #f6f3f2 100%);
+    radial-gradient(circle at 10% 6%, rgba(230, 173, 170, 0.24), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(244, 216, 214, 0.34), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #fffdfc 46%, #faf7f6 100%);
 }
 
 a { color: inherit; text-decoration: none; }
@@ -68,7 +69,7 @@ button { border: 0; cursor: pointer; }
   top: 0;
   height: 100vh;
   padding: 26px 18px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(24px);
   border-right: 1px solid rgba(234, 223, 221, 0.85);
 }
@@ -140,6 +141,12 @@ button { border: 0; cursor: pointer; }
   border: 1px solid rgba(255,255,255,0.9);
   box-shadow: var(--shadow);
 }
+.schedule-panel.featured {
+  background: linear-gradient(145deg, rgba(255,255,255,0.94), rgba(248,232,231,0.74));
+  border-color: rgba(230, 173, 170, 0.52);
+}
+.schedule-panel.featured .panel-inner { padding: 24px; }
+.schedule-panel.featured .panel-title { font-size: 21px; }
 .panel-inner { padding: 22px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
 .panel-title { margin: 0; font-size: 19px; font-weight: 950; letter-spacing: -0.04em; }
@@ -184,6 +191,13 @@ input[type="range"] { width: 100%; accent-color: var(--primary-800); }
 .source-text { margin-top: 10px; color: #5f5655; font-size: 13px; line-height: 1.6; }
 
 .timeline-item, .grant-item { display: flex; gap: 12px; padding: 13px 0; border-top: 1px solid var(--line); }
+.timeline-item.active {
+  margin: 4px 0;
+  padding: 15px;
+  border: 1px solid rgba(230, 173, 170, 0.64);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
 .time-badge, .dday-badge { flex: 0 0 auto; min-width: 60px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--primary-100); color: var(--primary-900); font-size: 12px; font-weight: 950; }
 .mini-title { margin: 0; font-size: 14px; font-weight: 900; }
 .mini-text { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
