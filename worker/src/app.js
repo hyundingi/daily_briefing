@@ -96,8 +96,34 @@ export const APP_JS = String.raw`
         .catch(function (err) { window.alert(err.message || String(err)); });
     }
 
+    function refreshGrants() {
+      var password = window.prompt("관리자 비밀번호를 입력해주세요.");
+      if (!password) return;
+      fetch("/api/grants/refresh", { method: "POST", headers: { "Content-Type": "application/json", "X-Update-Password": password } })
+        .then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
+        .then(function (result) {
+          window.alert(result.ok ? "국책과제 수집 완료: 신규 " + (result.json.added || 0) + "건 / 수집 " + (result.json.total || 0) + "건" : (result.json.error || "국책과제 수집에 실패했습니다."));
+          loadLatest();
+        })
+        .catch(function (err) { window.alert(err.message || String(err)); });
+    }
+
+    function refreshFinancials() {
+      var password = window.prompt("관리자 비밀번호를 입력해주세요.");
+      if (!password) return;
+      fetch("/api/financials/refresh", { method: "POST", headers: { "Content-Type": "application/json", "X-Update-Password": password } })
+        .then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
+        .then(function (result) {
+          window.alert(result.ok ? "DART 재무정보 수집 완료: 신규 " + (result.json.added || 0) + "건 / 수집 " + (result.json.total || 0) + "건" : (result.json.error || "DART 재무정보 수집에 실패했습니다."));
+          loadLatest();
+        })
+        .catch(function (err) { window.alert(err.message || String(err)); });
+    }
+
     var disclosures = sortItems((data && data.disclosures) || []);
     var news = sortItems((data && data.news) || []);
+    var grants = ((data && data.government_projects) || []).slice().sort(compareGrants);
+    var financials = (data && data.financial_metrics) || [];
     var todayDisclosures = disclosures.filter(function (item) { return sameDay(item); });
     var todayNews = news.filter(function (item) { return sameDay(item); });
     var filteredDisclosures = filterItems(disclosures, company, query);
@@ -109,16 +135,18 @@ export const APP_JS = String.raw`
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
-        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, todayDisclosures: todayDisclosures, todayNews: todayNews }) : null,
+        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, todayDisclosures: todayDisclosures, todayNews: todayNews }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
-        !loading && active === "finance" ? h(ComingSoon, { title: "상위사 실적비교", text: "DART 재무정보 API를 붙여 주요 상위사의 매출액, 영업이익, 부채비율을 비교하는 영역입니다." }) : null,
+        !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
-        !loading && active === "schedule" ? h(SchedulePage, null) : null,
+        !loading && active === "schedule" ? h(SchedulePage, { grants: grants }) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
           h("button", { className: "ghost-button", onClick: summarizeMissing }, "AI 요약 채우기"),
+          h("button", { className: "ghost-button", onClick: refreshGrants }, "국책과제 수집"),
+          h("button", { className: "ghost-button", onClick: refreshFinancials }, "DART 재무 수집"),
           h("button", { className: "ghost-button", onClick: function () { setAdminOpen(false); } }, "닫기")
         )
       ),
@@ -156,12 +184,12 @@ export const APP_JS = String.raw`
       h("section", { className: "kpi-grid" },
         h(KpiCard, { label: "오늘 공시", value: props.todayDisclosures.length, unit: "건", foot: "DART 기준" }),
         h(KpiCard, { label: "오늘 뉴스", value: props.todayNews.length, unit: "건", foot: "네이버 뉴스 기준" }),
-        h(KpiCard, { label: "당월 매출 달성률", value: "92", unit: "%", foot: "샘플 · 엑셀 업로드 연동 예정" }),
+        h(KpiCard, { label: "모집중 국책과제", value: props.grants.filter(function (item) { return item.status !== "마감"; }).length, unit: "건", foot: "마감일 가까운 순" }),
         h(KpiCard, { label: "실적 마감", value: "D-5", unit: "", foot: "캘린더 연동 예정" })
       ),
       h("section", { className: "dashboard-grid" },
-        h("div", { className: "stack" }, h(FinancePreview, null), h(ProfitPanel, null), h(CashPanel, null)),
-        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, null), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }))
+        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }))
       )
     );
   }
@@ -170,8 +198,48 @@ export const APP_JS = String.raw`
     return h("article", { className: "kpi-card" }, h("p", { className: "kpi-label" }, props.label), h("p", { className: "kpi-value" }, props.value, props.unit ? h("span", { className: "kpi-unit" }, props.unit) : null), h("p", { className: "kpi-foot" }, props.foot));
   }
 
-  function FinancePreview() {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "상위사 실적비교", subtitle: "주요 상위사의 매출액 및 영업이익 추이를 비교할 예정입니다.", pill: "DART 재무 API 예정" }), h("div", { className: "chart-card" }, h("div", { className: "chart-grid" }), h("div", { className: "chart-line" }), h("div", { className: "chart-line alt" }), h("div", { className: "chart-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익")))));
+  function FinancePreview(props) {
+    var rows = financialRows(props && props.financials ? props.financials : []);
+    var content = rows.length ? h("div", { className: "finance-table" },
+      h("div", { className: "finance-row head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "기준")),
+      rows.slice(0, props && props.expanded ? 20 : 6).map(function (row) {
+        return h("div", { className: "finance-row", key: row.company }, h("span", { className: "profit-name" }, row.company), h("span", null, formatAmount(row.revenue)), h("span", null, formatAmount(row.operatingProfit)), h("span", null, row.year + " " + reportCodeLabel(row.reportCode)));
+      })
+    ) : h(FinancePlaceholderChart, null);
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows.length + "개사" : "DART 재무 API" }),
+      content
+    ));
+  }
+
+  function FinancePlaceholderChart() {
+    return h("div", { className: "chart-card" },
+      h("div", { className: "chart-grid" }),
+      h("div", { className: "chart-line" }),
+      h("div", { className: "chart-line alt" }),
+      h("div", { className: "chart-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익"))
+    );
+  }
+
+  function financialRows(items) {
+    var grouped = {};
+    items.forEach(function (item) {
+      var key = item.company + ":" + item.fiscal_year + ":" + item.report_code;
+      if (!grouped[key]) grouped[key] = { company: item.company, year: item.fiscal_year, reportCode: item.report_code, revenue: null, operatingProfit: null };
+      if (item.account_name === "매출액" || item.account_name === "영업수익") grouped[key].revenue = item.amount;
+      if (item.account_name === "영업이익") grouped[key].operatingProfit = item.amount;
+    });
+    return Object.values(grouped).sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0); });
+  }
+
+  function formatAmount(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    var billion = Math.round(Number(value) / 100000000);
+    return billion.toLocaleString("ko-KR") + "억";
+  }
+
+  function reportCodeLabel(code) {
+    return { "11013": "1분기", "11012": "반기", "11014": "3분기", "11011": "사업보고서" }[code] || code || "";
   }
 
   function DivisionPanel() {
@@ -216,8 +284,8 @@ export const APP_JS = String.raw`
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "자금현황", subtitle: "가용 현금과 월별 주요 자금 흐름을 정리할 영역입니다.", pill: "연동 예정" }), h("div", { className: "cash-grid" }, h("article", null, h("span", null, "가용 현금"), h("strong", null, "245억")), h("article", null, h("span", null, "이번 달 예정 지출"), h("strong", null, "38억")), h("article", null, h("span", null, "확인 필요"), h("strong", null, "2건")))));
   }
 
-  function SchedulePage() {
-    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, null));
+  function SchedulePage(props) {
+    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants, expanded: true }));
   }
 
   function IntelligencePanel(props) {
@@ -242,8 +310,23 @@ export const APP_JS = String.raw`
     return h("section", { className: props && props.featured ? "panel schedule-panel featured" : "panel schedule-panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 팀 타임라인", subtitle: "가장 먼저 확인해야 하는 일정 영역입니다. Google Calendar 연동 예정입니다.", pill: "오늘 일정" }), h("div", { className: "timeline-item active" }, h("span", { className: "time-badge" }, "09:30"), h("div", null, h("p", { className: "mini-title" }, "월간 실적 점검"), h("p", { className: "mini-text" }, "진행 중 일정은 배너로 강조할 예정입니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "14:00"), h("div", null, h("p", { className: "mini-title" }, "예산 조정 회의"), h("p", { className: "mini-text" }, "캘린더 권한 연결 후 실제 일정으로 대체됩니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "17:00"), h("div", null, h("p", { className: "mini-title" }, "마감 자료 취합"), h("p", { className: "mini-text" }, "보고 일정과 D-Day를 연결할 예정입니다.")))));
   }
 
-  function GrantPanel() {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 연동 예정입니다." }), h("div", { className: "grant-item" }, h("span", { className: "dday-badge" }, "D-12"), h("div", null, h("p", { className: "mini-title" }, "바이오헬스 R&D 지원사업"), h("p", { className: "mini-text" }, "지원규모, 대상, 마감일 중심으로 카드화할 예정입니다.")))));
+  function GrantPanel(props) {
+    var grants = (props && props.grants ? props.grants : []).slice(0, props && props.expanded ? 20 : 5);
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: grants.length ? grants.length + "건" : "연결 대기" }),
+      h("div", { className: "grant-list" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다."))
+    ));
+  }
+
+  function GrantCard(props) {
+    var item = props.item;
+    return h("article", { className: "grant-card" },
+      h("div", { className: "grant-top" }, h("span", { className: "dday-badge" }, ddayText(item.deadline)), h("span", { className: "grant-source" }, item.source || "국책과제")),
+      h(item.link ? "a" : "p", { className: "mini-title", href: item.link || undefined, target: item.link ? "_blank" : undefined, rel: item.link ? "noreferrer" : undefined }, item.title || "제목 없음"),
+      h("p", { className: "mini-text" }, [item.agency, item.category, item.deadline ? "마감 " + item.deadline : "마감일 확인 필요"].filter(Boolean).join(" · ")),
+      item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null,
+      item.budget || item.target ? h("p", { className: "mini-text" }, [item.budget ? "지원규모: " + item.budget : "", item.target ? "대상: " + item.target : ""].filter(Boolean).join(" / ")) : null
+    );
   }
 
   function ComingSoon(props) {
@@ -304,6 +387,23 @@ export const APP_JS = String.raw`
     var raw = item.date || item.pub_date || item.rcept_dt || "";
     if (/^\d{8}$/.test(raw)) raw = raw.slice(0, 4) + "-" + raw.slice(4, 6) + "-" + raw.slice(6, 8);
     return String(raw).slice(0, 10) === TODAY;
+  }
+
+  function compareGrants(a, b) {
+    var ad = a.deadline || "9999-12-31";
+    var bd = b.deadline || "9999-12-31";
+    return String(ad).localeCompare(String(bd));
+  }
+
+  function ddayText(deadline) {
+    if (!deadline) return "D-?";
+    var today = new Date(TODAY + "T00:00:00+09:00");
+    var end = new Date(String(deadline).slice(0, 10) + "T00:00:00+09:00");
+    if (isNaN(end.getTime())) return "D-?";
+    var diff = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+    if (diff < 0) return "마감";
+    if (diff === 0) return "D-day";
+    return "D-" + diff;
   }
 
   function itemKey(item) {

@@ -6,6 +6,7 @@ import { APP_CSS } from "./styles.js";
 const DART_VIEWER_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=";
 const DART_LIST_URL = "https://opendart.fss.or.kr/api/list.json";
 const DART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml";
+const DART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json";
 const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 
@@ -53,6 +54,28 @@ const IMPORTANT_CATEGORIES = new Set(["사업/계약", "투자/M&A", "자금조�
 const MAX_STORED_ITEMS = 500;
 const RETENTION_DAYS = 30;
 const MAX_DISCLOSURE_TEXT_CHARS = 9000;
+const GOV_PROJECT_SOURCES = [
+  { key: "bizinfo", name: "기업마당", urlEnv: "BIZINFO_API_URL", keyEnv: "BIZINFO_API_KEY" },
+  { key: "ntis", name: "NTIS", urlEnv: "NTIS_API_URL", keyEnv: "NTIS_API_KEY" },
+  { key: "kstartup", name: "K-Startup", urlEnv: "KSTARTUP_API_URL", keyEnv: "KSTARTUP_API_KEY" },
+  { key: "iris", name: "IRIS", urlEnv: "IRIS_API_URL", keyEnv: "IRIS_API_KEY" },
+  { key: "khidi", name: "KHIDI", urlEnv: "KHIDI_API_URL", keyEnv: "KHIDI_API_KEY" },
+];
+const GOV_PROJECT_ALLOWED_HOSTS = new Set([
+  "www.bizinfo.go.kr",
+  "bizinfo.go.kr",
+  "www.ntis.go.kr",
+  "ntis.go.kr",
+  "nidview.k-startup.go.kr",
+  "www.k-startup.go.kr",
+  "k-startup.go.kr",
+  "www.iris.go.kr",
+  "iris.go.kr",
+  "www.khidi.or.kr",
+  "khidi.or.kr",
+  "bioagora.khidi.or.kr",
+]);
+const GOV_PROJECT_KEYWORDS = ["바이오", "헬스", "제약", "의료", "디지털헬스", "임상", "R&D", "연구개발"];
 
 export default {
   async fetch(request, env) {
@@ -62,12 +85,16 @@ export default {
       if (request.method === "GET" && url.pathname === "/assets/app.js") return javascriptResponse(APP_JS);
       if (request.method === "GET" && url.pathname === "/assets/styles.css") return cssResponse(APP_CSS);
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
+      if (request.method === "GET" && url.pathname === "/api/financials") return jsonResponse(await financialMetricsFromD1(env));
+      if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env));
       if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
         const date = url.pathname.split("/").pop();
         return jsonResponse(await archiveBriefing(env, date));
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
+      if (request.method === "POST" && url.pathname === "/api/financials/refresh") return await refreshFinancialMetrics(request, env);
+      if (request.method === "POST" && url.pathname === "/api/grants/refresh") return await refreshGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/summarize-missing") return await summarizeMissing(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/import-archive") return await importNewsletterArchive(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/generate") return await generateNewsletter(request, env);
@@ -183,6 +210,7 @@ async function refreshWithD1(env) {
   const diagnostics = [];
   const collectedDisclosures = await collectDisclosures(env, diagnostics);
   const collectedNews = await collectNews(env, diagnostics);
+  const collectedGovernmentProjects = await collectGovernmentProjects(env, diagnostics);
   ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
 
   const now = new Date();
@@ -192,7 +220,8 @@ async function refreshWithD1(env) {
 
   const newDisclosures = await filterNewRows(env.DB, "disclosures", collectedDisclosures, disclosureKey);
   const newNews = await filterNewRows(env.DB, "news_articles", collectedNews, newsKey);
-  const added = { disclosures: newDisclosures.length, news: newNews.length };
+  const newGovernmentProjects = await filterNewRows(env.DB, "government_projects", collectedGovernmentProjects, governmentProjectKey);
+  const added = { disclosures: newDisclosures.length, news: newNews.length, government_projects: newGovernmentProjects.length };
   const itemSummaries = added.disclosures || added.news ? await analyzeItems(env, newDisclosures, newNews, diagnostics) : [];
 
   const statements = [];
@@ -208,6 +237,9 @@ async function refreshWithD1(env) {
       ON CONFLICT(id) DO UPDATE SET category=excluded.category, title=excluded.title, summary=excluded.summary, link=excluded.link, media=excluded.media, published_at=excluded.published_at, important=excluded.important, last_seen_at=excluded.last_seen_at`)
       .bind(newsKey(item), item.company, item.category, item.title, item.summary, item.link, item.media, item.published_at, item.important ? 1 : 0, nowText, nowText));
   }
+  for (const item of collectedGovernmentProjects) {
+    statements.push(governmentProjectStatement(env, item, nowText));
+  }
   statements.push(...itemSummaryStatements(env, itemSummaries, nowText));
   statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(runId, kstTimestamp(startedAt), nowText, collectedDisclosures.length, collectedNews.length, added.disclosures, added.news, JSON.stringify(diagnostics)));
@@ -215,6 +247,31 @@ async function refreshWithD1(env) {
 
   const briefing = await latestBriefingFromD1(env, nowText, diagnostics);
   return jsonResponse({ ok: true, briefing, added });
+}
+
+async function refreshGovernmentProjects(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const diagnostics = [];
+  const now = new Date();
+  const nowText = kstTimestamp(now);
+  const collected = await collectGovernmentProjects(env, diagnostics);
+  const fresh = await filterNewRows(env.DB, "government_projects", collected, governmentProjectKey);
+  const statements = collected.map((item) => governmentProjectStatement(env, item, nowText));
+  if (statements.length) await env.DB.batch(statements);
+  return jsonResponse({ ok: true, added: fresh.length, total: collected.length, projects: await governmentProjectsFromD1(env), diagnostics });
+}
+
+async function refreshFinancialMetrics(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const diagnostics = [];
+  const nowText = kstTimestamp(new Date());
+  const collected = await collectFinancialMetrics(env, diagnostics);
+  const fresh = await filterNewRows(env.DB, "financial_metrics", collected, financialMetricKey);
+  const statements = collected.map((item) => financialMetricStatement(env, item, nowText));
+  if (statements.length) await env.DB.batch(statements);
+  return jsonResponse({ ok: true, added: fresh.length, total: collected.length, financials: await financialMetricsFromD1(env), diagnostics });
 }
 
 async function summarizeMissing(request, env) {
@@ -478,6 +535,8 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const cutoff = kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
   const disclosureRows = await env.DB.prepare("SELECT * FROM disclosures WHERE first_seen_at >= ? ORDER BY disclosure_date DESC, company ASC").bind(cutoff).all();
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
+  const governmentProjects = await governmentProjectsFromD1(env, cutoff);
+  const financialMetrics = await financialMetricsFromD1(env);
   const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
   const news = (newsRows.results || []).map(newsFromDb);
   const itemSummaries = await itemSummariesFromD1(env);
@@ -487,12 +546,16 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
     updated_at: updatedAt || (await latestRefreshTime(env)) || "",
     disclosures,
     news,
+    government_projects: governmentProjects,
+    financial_metrics: financialMetrics,
     analysis: {},
     item_summaries: itemSummaries,
     diagnostics,
     summary: {
       disclosure_count: disclosures.length,
       news_count: news.length,
+      government_project_count: governmentProjects.length,
+      financial_metric_count: financialMetrics.length,
       important_disclosure_count: disclosures.filter((item) => item.important).length,
       important_news_count: news.filter((item) => item.important).length,
     },
@@ -558,6 +621,8 @@ async function cleanupOldData(env, now) {
     env.DB.prepare("DELETE FROM ai_briefings WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM item_ai_summaries WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM disclosure_documents WHERE fetched_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM government_projects WHERE first_seen_at < ?").bind(cutoff),
+    env.DB.prepare("DELETE FROM financial_metrics WHERE first_seen_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_items WHERE run_id IN (SELECT id FROM newsletter_runs WHERE created_at < ?)").bind(cutoff),
     env.DB.prepare("DELETE FROM newsletter_runs WHERE created_at < ?").bind(cutoff),
     env.DB.prepare("DELETE FROM refresh_runs WHERE started_at < ?").bind(cutoff),
@@ -582,6 +647,79 @@ function disclosureFromDb(row) {
 
 function newsFromDb(row) {
   return { type: "news", company: row.company, category: row.category, title: row.title, summary: row.summary, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important };
+}
+
+async function governmentProjectsFromD1(env, cutoff = "") {
+  if (!env.DB) return [];
+  const since = cutoff || kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
+  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE first_seen_at >= ? ORDER BY CASE WHEN deadline IS NULL OR deadline = '' THEN 1 ELSE 0 END, deadline ASC, announcement_date DESC LIMIT 200`).bind(since).all();
+  return (rows.results || []).map(governmentProjectFromDb);
+}
+
+function governmentProjectFromDb(row) {
+  return {
+    type: "government_project",
+    id: row.id,
+    source: row.source,
+    title: row.title,
+    agency: row.agency,
+    category: row.category,
+    summary: row.summary,
+    link: row.link,
+    announcement_date: row.announcement_date,
+    deadline: row.deadline,
+    status: row.status,
+    budget: row.budget,
+    target: row.target,
+    keywords: row.keywords,
+    first_seen_at: row.first_seen_at,
+    last_seen_at: row.last_seen_at,
+  };
+}
+
+function governmentProjectStatement(env, item, nowText) {
+  return env.DB.prepare(`INSERT INTO government_projects (id, source, title, agency, category, summary, link, announcement_date, deadline, status, budget, target, keywords, raw_json, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET agency=excluded.agency, category=excluded.category, summary=excluded.summary, link=excluded.link, announcement_date=excluded.announcement_date, deadline=excluded.deadline, status=excluded.status, budget=excluded.budget, target=excluded.target, keywords=excluded.keywords, raw_json=excluded.raw_json, last_seen_at=excluded.last_seen_at`)
+    .bind(governmentProjectKey(item), item.source, item.title, item.agency, item.category, item.summary, item.link, item.announcement_date, item.deadline, item.status, item.budget, item.target, item.keywords, item.raw_json, nowText, nowText);
+}
+
+function governmentProjectKey(item) {
+  return `${item.source}:${normalize(item.title)}:${item.deadline || item.announcement_date || ""}`;
+}
+
+async function financialMetricsFromD1(env) {
+  if (!env.DB) return [];
+  const rows = await env.DB.prepare("SELECT * FROM financial_metrics ORDER BY fiscal_year DESC, report_code DESC, company ASC, account_name ASC LIMIT 300").all();
+  return (rows.results || []).map(financialMetricFromDb);
+}
+
+function financialMetricFromDb(row) {
+  return {
+    type: "financial_metric",
+    id: row.id,
+    company: row.company,
+    fiscal_year: row.fiscal_year,
+    report_code: row.report_code,
+    account_name: row.account_name,
+    account_detail: row.account_detail,
+    amount: row.amount,
+    currency: row.currency,
+    statement_name: row.statement_name,
+    first_seen_at: row.first_seen_at,
+    last_seen_at: row.last_seen_at,
+  };
+}
+
+function financialMetricStatement(env, item, nowText) {
+  return env.DB.prepare(`INSERT INTO financial_metrics (id, company, fiscal_year, report_code, account_name, account_detail, amount, currency, statement_name, raw_json, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET account_detail=excluded.account_detail, amount=excluded.amount, currency=excluded.currency, statement_name=excluded.statement_name, raw_json=excluded.raw_json, last_seen_at=excluded.last_seen_at`)
+    .bind(financialMetricKey(item), item.company, item.fiscal_year, item.report_code, item.account_name, item.account_detail, item.amount, item.currency, item.statement_name, item.raw_json, nowText, nowText);
+}
+
+function financialMetricKey(item) {
+  return `${item.company}:${item.fiscal_year}:${item.report_code}:${normalize(item.account_name)}:${normalize(item.statement_name)}`;
 }
 
 function parseJson(value, fallback) {
@@ -729,6 +867,215 @@ async function collectNews(env, diagnostics) {
   }
 
   return dedupe(rows, (item) => `${item.company}:${normalize(item.title)}`).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)) || companyIndex(a.company) - companyIndex(b.company));
+}
+
+async function collectGovernmentProjects(env, diagnostics) {
+  const rows = [];
+  for (const source of GOV_PROJECT_SOURCES) {
+    const urlTemplate = clean(env[source.urlEnv]);
+    if (!urlTemplate) {
+      diagnostics.push({ step: `grant:${source.key}`, status: "missing_config", required: source.urlEnv });
+      continue;
+    }
+    const apiKey = clean(env[source.keyEnv]);
+    for (const keyword of configuredGovernmentKeywords(env)) {
+      try {
+        const url = governmentProjectUrl(urlTemplate, apiKey, keyword);
+        const host = new URL(url).hostname;
+        if (!GOV_PROJECT_ALLOWED_HOSTS.has(host)) {
+          diagnostics.push({ step: `grant:${source.key}`, keyword, status: "blocked_host", host });
+          continue;
+        }
+        const response = await fetch(url, { headers: { Accept: "application/json, application/xml, text/xml, */*" } });
+        const text = await response.text();
+        if (!response.ok) {
+          diagnostics.push({ step: `grant:${source.key}`, keyword, status: "http_error", http_status: response.status, body: text.slice(0, 160) });
+          continue;
+        }
+        const parsed = parseGovernmentPayload(text, response.headers.get("content-type") || "");
+        const normalized = normalizeGovernmentProjects(parsed, source, keyword);
+        rows.push(...normalized);
+        diagnostics.push({ step: `grant:${source.key}`, keyword, status: "ok", count: normalized.length });
+      } catch (error) {
+        diagnostics.push({ step: `grant:${source.key}`, keyword, status: "exception", error: safeError(error) });
+      }
+    }
+  }
+  return dedupe(rows, governmentProjectKey).sort(compareGovernmentProjects).slice(0, MAX_STORED_ITEMS);
+}
+
+async function collectFinancialMetrics(env, diagnostics) {
+  if (!env.DART_API_KEY) {
+    diagnostics.push({ step: "dart_financials", status: "missing_secret" });
+    return [];
+  }
+  const fiscalYear = clean(env.DART_FINANCIAL_YEAR) || String(new Date().getFullYear() - 1);
+  const reportCode = clean(env.DART_FINANCIAL_REPORT_CODE) || "11011";
+  const rows = [];
+  for (const company of TARGET_COMPANIES) {
+    const url = new URL(DART_FINANCIAL_URL);
+    url.searchParams.set("crtfc_key", env.DART_API_KEY);
+    url.searchParams.set("corp_code", company.corpCode);
+    url.searchParams.set("bsns_year", fiscalYear);
+    url.searchParams.set("reprt_code", reportCode);
+    try {
+      const payload = await fetchJson(url.toString(), { headers: { Accept: "application/json,text/plain,*/*" } });
+      diagnostics.push({ step: "dart_financials", company: company.name, year: fiscalYear, report_code: reportCode, status: payload.status || "unknown", count: Array.isArray(payload.list) ? payload.list.length : 0 });
+      if (payload.status !== "000") continue;
+      for (const item of payload.list || []) {
+        const accountName = clean(item.account_nm);
+        if (!isCoreFinancialAccount(accountName)) continue;
+        rows.push({
+          company: company.name,
+          fiscal_year: fiscalYear,
+          report_code: reportCode,
+          account_name: accountName,
+          account_detail: clean(item.account_detail),
+          amount: numberAmount(item.thstrm_amount),
+          currency: clean(item.currency) || "KRW",
+          statement_name: clean(item.sj_nm),
+          raw_json: JSON.stringify(item).slice(0, 5000),
+        });
+      }
+    } catch (error) {
+      diagnostics.push({ step: "dart_financials", company: company.name, status: "request_error", reason: safeError(error) });
+    }
+  }
+  return dedupe(rows, financialMetricKey);
+}
+
+function isCoreFinancialAccount(accountName) {
+  return ["매출액", "영업수익", "영업이익", "당기순이익", "자산총계", "부채총계", "자본총계"].includes(accountName);
+}
+
+function numberAmount(value) {
+  const text = String(value || "").replace(/,/g, "").trim();
+  if (!text || text === "-") return null;
+  const parsed = Number(text.replace(/[()]/g, ""));
+  if (!Number.isFinite(parsed)) return null;
+  return text.includes("(") && text.includes(")") ? -parsed : parsed;
+}
+
+function configuredGovernmentKeywords(env) {
+  const raw = clean(env.GOV_PROJECT_KEYWORDS);
+  if (!raw) return GOV_PROJECT_KEYWORDS;
+  return raw.split(/[|,]/).map((item) => item.trim()).filter(Boolean).slice(0, 12);
+}
+
+function governmentProjectUrl(template, apiKey, keyword) {
+  const replaced = template
+    .replaceAll("{key}", encodeURIComponent(apiKey || ""))
+    .replaceAll("{apiKey}", encodeURIComponent(apiKey || ""))
+    .replaceAll("{serviceKey}", encodeURIComponent(apiKey || ""))
+    .replaceAll("{keyword}", encodeURIComponent(keyword || ""))
+    .replaceAll("{query}", encodeURIComponent(keyword || ""))
+    .replaceAll("{page}", "1")
+    .replaceAll("{limit}", "20");
+  return new URL(replaced).toString();
+}
+
+function parseGovernmentPayload(text, contentType) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return [];
+  if (contentType.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) return JSON.parse(trimmed);
+  return xmlItems(trimmed);
+}
+
+function xmlItems(xml) {
+  const matches = xml.match(/<(item|row|list|data)[^>]*>[\s\S]*?<\/\1>/gi) || [];
+  return matches.map((block) => {
+    const row = {};
+    const fieldMatches = block.matchAll(/<([A-Za-z0-9_:\-가-힣]+)[^>]*>([\s\S]*?)<\/\1>/g);
+    for (const match of fieldMatches) {
+      const key = match[1].replace(/^.*:/, "");
+      const value = decodeXml(match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+      if (value && !row[key]) row[key] = value;
+    }
+    return row;
+  });
+}
+
+function normalizeGovernmentProjects(payload, source, keyword) {
+  const result = [];
+  for (const row of findGovernmentRows(payload)) {
+    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "사업명", "공고명", "과제명", "name", "subject"]);
+    if (!title) continue;
+    const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "상세URL", "상세페이지url"]);
+    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"]));
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "pbancRcptBgngYmd", "pblancDe", "공고일", "등록일", "startYmd"]));
+    result.push({
+      source: source.name,
+      title: clean(title),
+      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "기관명", "소관부처", "department", "organNm"])),
+      category: clean(firstField(row, ["category", "bizCategory", "supportType", "분야", "사업분류"])) || keyword,
+      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "사업내용", "지원내용", "사업소개정보"])),
+      link: link ? String(link).trim() : "",
+      announcement_date: announcementDate,
+      deadline,
+      status: clean(firstField(row, ["status", "recruitmentStatus", "접수상태", "공고상태"])) || statusFromDeadline(deadline),
+      budget: clean(firstField(row, ["budget", "supportBudget", "사업지원예산정보", "지원규모", "지원금액"])),
+      target: clean(firstField(row, ["target", "supportTarget", "사업지원대상정보", "지원대상", "대상"])),
+      keywords: keyword,
+      raw_json: JSON.stringify(row).slice(0, 5000),
+    });
+  }
+  return result;
+}
+
+function findGovernmentRows(payload) {
+  if (Array.isArray(payload)) return payload.filter((item) => item && typeof item === "object");
+  if (!payload || typeof payload !== "object") return [];
+  const queue = [payload];
+  const candidates = [];
+  while (queue.length) {
+    const current = queue.shift();
+    for (const value of Object.values(current || {})) {
+      if (Array.isArray(value)) candidates.push(value);
+      else if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  const arrays = candidates.map((items) => items.filter((item) => item && typeof item === "object")).filter((items) => items.length);
+  arrays.sort((a, b) => b.length - a.length);
+  return arrays[0] || [];
+}
+
+function firstField(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim()) return row[key];
+  }
+  const normalizedKeys = Object.keys(row || {}).reduce((acc, key) => { acc[normalize(key)] = key; return acc; }, {});
+  for (const key of keys) {
+    const actual = normalizedKeys[normalize(key)];
+    if (actual && row[actual] !== undefined && row[actual] !== null && String(row[actual]).trim()) return row[actual];
+  }
+  return "";
+}
+
+function normalizeGovernmentDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const spaced = raw.match(/(20\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
+  if (spaced) return `${spaced[1]}-${String(spaced[2]).padStart(2, "0")}-${String(spaced[3]).padStart(2, "0")}`;
+  const compact = raw.match(/(20\d{2})(\d{2})(\d{2})/);
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  return raw.slice(0, 20);
+}
+
+function statusFromDeadline(deadline) {
+  if (!deadline) return "확인 필요";
+  const end = new Date(`${deadline}T23:59:59+09:00`);
+  if (Number.isNaN(end.getTime())) return "확인 필요";
+  return end.getTime() >= Date.now() ? "모집중" : "마감";
+}
+
+function compareGovernmentProjects(a, b) {
+  const ad = a.deadline || "9999-12-31";
+  const bd = b.deadline || "9999-12-31";
+  return ad.localeCompare(bd) || String(b.announcement_date || "").localeCompare(String(a.announcement_date || ""));
+}
+
+function decodeXml(value) {
+  return String(value || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
 async function analyze(env, disclosures, news, diagnostics) {
@@ -1294,8 +1641,10 @@ function emptyBriefing() {
     updated_at: "",
     disclosures: [],
     news: [],
+    government_projects: [],
+    financial_metrics: [],
     analysis: {},
-    summary: { disclosure_count: 0, news_count: 0, important_disclosure_count: 0, important_news_count: 0 },
+    summary: { disclosure_count: 0, news_count: 0, government_project_count: 0, financial_metric_count: 0, important_disclosure_count: 0, important_news_count: 0 },
   };
 }
 

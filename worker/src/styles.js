@@ -169,6 +169,19 @@ button { border: 0; cursor: pointer; }
 .division-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .profit-table { display: grid; gap: 8px; }
+.finance-table { display: grid; gap: 8px; }
+.finance-row {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, minmax(90px, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 13px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+}
+.finance-row.head { background: var(--primary-50); color: var(--primary-900); font-size: 12px; font-weight: 950; }
+.finance-row:not(.head) span { font-size: 13px; font-weight: 800; }
 .profit-row {
   display: grid;
   grid-template-columns: 86px 82px repeat(3, minmax(74px, 1fr));
@@ -214,6 +227,11 @@ button { border: 0; cursor: pointer; }
 .time-badge, .dday-badge { flex: 0 0 auto; min-width: 60px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--primary-100); color: var(--primary-900); font-size: 12px; font-weight: 950; }
 .mini-title { margin: 0; font-size: 14px; font-weight: 900; }
 .mini-text { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.grant-list { display: grid; gap: 10px; }
+.grant-card { padding: 14px; border-radius: 20px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); }
+.grant-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.grant-source { color: var(--primary-900); font-size: 12px; font-weight: 950; }
+.grant-summary { margin: 9px 0 0; color: #5f5655; font-size: 13px; line-height: 1.58; }
 
 .content-toolbar { display: grid; grid-template-columns: 180px minmax(220px, 1fr); gap: 10px; margin-bottom: 16px; }
 .field { width: 100%; height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.78); color: var(--ink); outline: none; }
@@ -263,5 +281,6 @@ button { border: 0; cursor: pointer; }
   .updated-chip { display: inline-flex; margin-top: 12px; }
   .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .cash-grid { grid-template-columns: 1fr; }
   .profit-row { grid-template-columns: 1fr 1fr; }
+  .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;

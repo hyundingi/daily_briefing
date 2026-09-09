@@ -14,6 +14,8 @@
 - 좌측 navbar에서 대시보드, 재무비교, 손익, 자금현황, 일정, 공시, 뉴스 영역을 전환합니다.
 - 공시 / 뉴스 탭에서는 기업명 선택과 검색어로 필터링할 수 있습니다.
 - Cloudflare Worker cron이 30분마다 새 공시/뉴스를 수집해 D1에 누적 저장합니다.
+- 국책과제 공고는 기업마당, NTIS, K-Startup, IRIS, KHIDI API 설정값이 있으면 함께 수집해 D1에 저장합니다.
+- DART 재무정보는 숨김 관리자 메뉴의 `DART 재무 수집`으로 단일회사 주요계정 API를 호출해 저장합니다.
 - 화면 상단에는 마지막 데이터 업데이트 시간이 표시됩니다.
 - 새로 추가된 공시/뉴스가 있을 때만 Gemini 요약을 생성합니다.
 - 관리자 숨김 메뉴에서 AI 요약 채우기를 실행하면 이미 저장된 항목 중 요약이 없는 최신 10건만 Gemini로 보강합니다.
@@ -121,6 +123,10 @@ Cloudflare Worker의 핵심 코드입니다.
 
 - `/`: 웹페이지 렌더링
 - `/api/latest`: 최근 30일 공시/뉴스 조회
+- `/api/financials`: 저장된 DART 재무지표 조회
+- `/api/financials/refresh`: DART 단일회사 주요계정 수동 수집
+- `/api/grants`: 최근 30일 국책과제/지원사업 공고 조회
+- `/api/grants/refresh`: 국책과제/지원사업 공고 수동 수집
 - `/api/archive`: 발송된 뉴스레터 아카이브 목록 조회
 - `/api/archive/YYYY-MM-DD`: 해당 날짜 뉴스레터 전문 조회
 - `/api/refresh`: 새 공시/뉴스 수집 및 D1 저장
@@ -173,9 +179,38 @@ D1 DB 테이블 생성 파일입니다.
 - `ai_briefings`: Gemini 요약 저장
 - `item_ai_summaries`: 개별 공시/기사별 Gemini 요약 저장
 - `disclosure_documents`: DART 원문 ZIP에서 추출한 공시 본문 텍스트 캐시
+- `government_projects`: 국책과제/지원사업 공고 누적 저장
+- `financial_metrics`: DART 단일회사 주요계정 재무지표 저장
 - `newsletter_runs`: 뉴스레터 발송 단위 저장
 - `newsletter_items`: 뉴스레터에 포함된 공시/뉴스 저장
 - `refresh_runs`: 업데이트 실행 로그 저장
+
+### `worker/migrations/0004_government_projects.sql`
+
+국책과제/지원사업 공고 저장 테이블입니다.
+
+저장 필드:
+
+- 출처: 기업마당, NTIS, K-Startup, IRIS, KHIDI 등
+- 제목, 기관, 카테고리
+- 요약/지원내용, 원문 링크
+- 공고일, 마감일, 모집 상태
+- 지원규모, 지원대상, 검색 키워드
+
+국책과제 API URL은 공식 기관 도메인 allowlist에 있는 주소만 호출합니다. 임의 외부 URL로 API 키가 나가지 않도록 막아두었습니다.
+
+### `worker/migrations/0005_financial_metrics.sql`
+
+DART 단일회사 주요계정 API에서 받은 재무지표 저장 테이블입니다.
+
+현재 주요 저장 계정:
+
+- 매출액 / 영업수익
+- 영업이익
+- 당기순이익
+- 자산총계
+- 부채총계
+- 자본총계
 
 ### `daily_briefing.py`
 
@@ -212,10 +247,23 @@ KV는 현재 업데이트 중복 실행 방지용 lock과 기존 호환용으로
 Cloudflare Worker에 아래 secrets가 필요합니다.
 
 - `DART_API_KEY`
+- `DART_FINANCIAL_YEAR`: DART 재무정보 수집 사업연도입니다. 비워두면 전년도 기준입니다.
+- `DART_FINANCIAL_REPORT_CODE`: DART 보고서 코드입니다. 기본값은 `11011` 사업보고서입니다. `11013` 1분기, `11012` 반기, `11014` 3분기도 사용할 수 있습니다.
 - `NAVER_API_HUB_CLIENT_ID`
 - `NAVER_API_HUB_CLIENT_SECRET`
 - `GEMINI_API_KEY`
 - `UPDATE_PASSWORD`
+
+국책과제 API 선택값:
+
+- `GOV_PROJECT_KEYWORDS`: 국책과제 검색 키워드입니다. 기본값은 `바이오,헬스,제약,의료,디지털헬스,임상,R&D,연구개발`입니다.
+- `BIZINFO_API_URL`, `BIZINFO_API_KEY`: 기업마당 API URL/키입니다.
+- `NTIS_API_URL`, `NTIS_API_KEY`: NTIS API URL/키입니다.
+- `KSTARTUP_API_URL`, `KSTARTUP_API_KEY`: K-Startup API URL/키입니다.
+- `IRIS_API_URL`, `IRIS_API_KEY`: IRIS API URL/키입니다.
+- `KHIDI_API_URL`, `KHIDI_API_KEY`: KHIDI API URL/키입니다.
+
+API URL에는 `{keyword}`를 검색어 위치에 넣고, 인증키가 필요한 API는 `{key}` 또는 `{serviceKey}`를 키 위치에 넣습니다. 실제 값은 발급받은 공식 API 문서의 요청 URL을 기준으로 작성합니다.
 
 선택값:
 
