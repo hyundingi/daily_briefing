@@ -17,12 +17,12 @@ export const APP_JS = String.raw`
   };
   var NAV_ITEMS = [
     ["dashboard", "⌂", "대시보드"],
+    ["finance", "⌁", "재무비교"],
+    ["profit", "▦", "손익"],
+    ["cash", "₩", "자금현황"],
+    ["schedule", "◇", "일정"],
     ["disclosures", "□", "공시"],
-    ["news", "◌", "뉴스"],
-    ["archive", "▤", "아카이브"],
-    ["finance", "⌁", "재무 비교"],
-    ["simulator", "⇄", "손익 시뮬레이터"],
-    ["schedule", "◇", "일정 · 국책과제"]
+    ["news", "◌", "뉴스"]
   ];
 
   function App() {
@@ -106,16 +106,17 @@ export const APP_JS = String.raw`
     return h("div", { className: "app-shell" },
       h(Sidebar, { active: active, setActive: setActive }),
       h("main", { className: "main" },
-        h(Topbar, { data: data }),
+        h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
         !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, todayDisclosures: todayDisclosures, todayNews: todayNews }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
-        !loading && active === "finance" ? h(ComingSoon, { title: "재무 비교", text: "DART 재무정보 API를 붙여 매출액, 영업이익, 부채비율을 회사별 차트로 비교하는 영역입니다." }) : null,
-        !loading && active === "simulator" ? h(SimulatorPanel, null) : null,
-        !loading && active === "schedule" ? h(SchedulePanel, null) : null,
+        !loading && active === "finance" ? h(ComingSoon, { title: "상위사 실적비교", text: "DART 재무정보 API를 붙여 주요 상위사의 매출액, 영업이익, 부채비율을 비교하는 영역입니다." }) : null,
+        !loading && active === "profit" ? h(ProfitPanel, null) : null,
+        !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
+        !loading && active === "schedule" ? h(SchedulePage, null) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
           h("button", { className: "ghost-button", onClick: summarizeMissing }, "AI 요약 채우기"),
           h("button", { className: "ghost-button", onClick: function () { setAdminOpen(false); } }, "닫기")
@@ -143,7 +144,10 @@ export const APP_JS = String.raw`
   function Topbar(props) {
     return h("header", { className: "topbar" },
       h("div", null, h("p", { className: "page-kicker" }, "Daily Business Intelligence"), h("h1", { className: "page-title" }, "경영기획팀 의사결정 허브"), h("p", { className: "page-desc" }, "경쟁사 공시와 뉴스, 재무 지표, 실적 관리, 일정과 국책과제 정보를 한 화면에서 볼 수 있도록 확장하는 첫 화면입니다.")),
-      h("div", { className: "updated-chip" }, "데이터 업데이트: " + formatDateTime(props.data && props.data.updated_at))
+      h("div", { className: "topbar-actions" },
+        h("div", { className: "updated-chip" }, "데이터 업데이트: " + formatDateTime(props.data && props.data.updated_at)),
+        h("button", { className: "ghost-button", onClick: function () { props.setActive("archive"); } }, "뉴스레터 아카이브")
+      )
     );
   }
 
@@ -156,7 +160,7 @@ export const APP_JS = String.raw`
         h(KpiCard, { label: "실적 마감", value: "D-5", unit: "", foot: "캘린더 연동 예정" })
       ),
       h("section", { className: "dashboard-grid" },
-        h("div", { className: "stack" }, h(FinancePreview, null), h(DivisionPanel, null), h(SimulatorPanel, null)),
+        h("div", { className: "stack" }, h(FinancePreview, null), h(ProfitPanel, null), h(CashPanel, null)),
         h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, null), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }))
       )
     );
@@ -167,7 +171,7 @@ export const APP_JS = String.raw`
   }
 
   function FinancePreview() {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "경쟁사 재무 실적 비교", subtitle: "매출액 및 영업이익 추이를 한 화면에서 비교할 예정입니다.", pill: "DART 재무 API 예정" }), h("div", { className: "chart-card" }, h("div", { className: "chart-grid" }), h("div", { className: "chart-line" }), h("div", { className: "chart-line alt" }), h("div", { className: "chart-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익")))));
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "상위사 실적비교", subtitle: "주요 상위사의 매출액 및 영업이익 추이를 비교할 예정입니다.", pill: "DART 재무 API 예정" }), h("div", { className: "chart-card" }, h("div", { className: "chart-grid" }), h("div", { className: "chart-line" }), h("div", { className: "chart-line alt" }), h("div", { className: "chart-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익")))));
   }
 
   function DivisionPanel() {
@@ -175,19 +179,45 @@ export const APP_JS = String.raw`
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "사업부문 실적 요약", subtitle: "엑셀 업로드 데이터와 연결할 자리입니다." }), h("div", { className: "division-grid" }, rows.map(function (row) { return h("article", { className: "division-card", key: row[0] }, h("p", { className: "division-name" }, row[0]), h("p", { className: "division-value" }, row[1]), h("p", { className: "division-note" }, row[2])); }))));
   }
 
-  function SimulatorPanel() {
-    var salesState = React.useState(100);
-    var sales = salesState[0];
-    var setSales = salesState[1];
-    var marketingState = React.useState(18);
-    var marketing = marketingState[0];
-    var setMarketing = marketingState[1];
-    var profitRate = Math.max(0, Math.round((sales * 0.28 - marketing) / sales * 100));
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "손익 시뮬레이터", subtitle: "슬라이더를 움직이면 예상 영업이익률이 즉시 바뀝니다." }), h("div", { className: "sim-grid" }, h("div", null, h(SliderRow, { label: "매출 목표", value: sales, suffix: "억원", min: 50, max: 180, onChange: setSales }), h(SliderRow, { label: "마케팅 예산", value: marketing, suffix: "억원", min: 5, max: 45, onChange: setMarketing })), h("div", { className: "sim-result" }, h("p", null, "예상 영업이익률"), h("p", { className: "big" }, profitRate + "%")))));
+  function ProfitPanel() {
+    var rows = [
+      ["전사", "9월 예상", "128.4억", "18.6억", "14.5%", "주요 품목 매출 반영 시 전월 대비 소폭 개선 가능성이 있습니다."],
+      ["ETC", "누적", "72.1억", "12.8억", "17.8%", "기존 주력 품목 흐름이 유지되는지가 핵심입니다."],
+      ["글로벌", "누적", "34.7억", "4.1억", "11.8%", "수출·파트너 매출 인식 시점에 따라 변동성이 큽니다."],
+      ["DH", "누적", "21.6억", "1.7억", "7.9%", "초기 투자비 부담이 있어 매출 전환 속도를 봐야 합니다."]
+    ];
+    return h("section", { className: "panel" },
+      h("div", { className: "panel-inner" },
+        h(PanelHead, { title: "손익", subtitle: "전사 예상 실적과 사업부문별 누적 실적을 표로 확인합니다.", pill: "샘플 데이터" }),
+        h("div", { className: "profit-table" },
+          h("div", { className: "profit-row head" },
+            h("span", null, "구분"),
+            h("span", null, "기준"),
+            h("span", null, "매출"),
+            h("span", null, "영업이익"),
+            h("span", null, "이익률")
+          ),
+          rows.map(function (row) {
+            return h("div", { className: "profit-row", key: row[0] + row[1] },
+              h("span", { className: "profit-name" }, row[0]),
+              h("span", null, row[1]),
+              h("span", null, row[2]),
+              h("span", null, row[3]),
+              h("span", null, row[4]),
+              h("p", { className: "profit-comment" }, row[5])
+            );
+          })
+        )
+      )
+    );
   }
 
-  function SliderRow(props) {
-    return h("div", { className: "slider-row" }, h("div", { className: "slider-label" }, h("span", null, props.label), h("strong", null, props.value + props.suffix)), h("input", { type: "range", min: props.min, max: props.max, value: props.value, onChange: function (event) { props.onChange(Number(event.target.value)); } }));
+  function CashPanel() {
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "자금현황", subtitle: "가용 현금과 월별 주요 자금 흐름을 정리할 영역입니다.", pill: "연동 예정" }), h("div", { className: "cash-grid" }, h("article", null, h("span", null, "가용 현금"), h("strong", null, "245억")), h("article", null, h("span", null, "이번 달 예정 지출"), h("strong", null, "38억")), h("article", null, h("span", null, "확인 필요"), h("strong", null, "2건")))));
+  }
+
+  function SchedulePage() {
+    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, null));
   }
 
   function IntelligencePanel(props) {
