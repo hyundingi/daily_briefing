@@ -901,6 +901,10 @@ async function collectGovernmentProjects(env, diagnostics) {
       continue;
     }
     const apiKey = clean(env[source.keyEnv]);
+    if (source.keyEnv && !apiKey) {
+      diagnostics.push({ step: `grant:${source.key}`, status: "missing_secret", required: source.keyEnv });
+      continue;
+    }
     for (const keyword of configuredGovernmentKeywords(env)) {
       try {
         const url = governmentProjectUrl(urlTemplate, apiKey, keyword);
@@ -918,7 +922,13 @@ async function collectGovernmentProjects(env, diagnostics) {
         const parsed = parseGovernmentPayload(text, response.headers.get("content-type") || "");
         const normalized = normalizeGovernmentProjects(parsed, source, keyword);
         rows.push(...normalized);
-        diagnostics.push({ step: `grant:${source.key}`, keyword, status: "ok", count: normalized.length });
+        const diagnostic = { step: `grant:${source.key}`, keyword, status: "ok", count: normalized.length };
+        if (!normalized.length && source.key === "ntis") {
+          diagnostic.body = sanitizeErrorMessage(clean(text).slice(0, 260));
+          diagnostic.hit_tags = (text.match(/<HIT\b/gi) || []).length;
+          diagnostic.item_tags = (text.match(/<(item|row|list|data)\b/gi) || []).length;
+        }
+        diagnostics.push(diagnostic);
       } catch (error) {
         diagnostics.push({ step: `grant:${source.key}`, keyword, status: "exception", error: safeError(error) });
       }
