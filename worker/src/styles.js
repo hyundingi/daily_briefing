@@ -227,7 +227,11 @@ button { border: 0; cursor: pointer; }
 .time-badge, .dday-badge { flex: 0 0 auto; min-width: 60px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--primary-100); color: var(--primary-900); font-size: 12px; font-weight: 950; }
 .mini-title { margin: 0; font-size: 14px; font-weight: 900; }
 .mini-text { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.grant-list { display: grid; gap: 10px; }
+.panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.grant-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 14px; }
+.result-count { color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
+.grant-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.grant-grid.expanded { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .grant-card { padding: 14px; border-radius: 20px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); }
 .grant-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .grant-source { color: var(--primary-900); font-size: 12px; font-weight: 950; }
@@ -280,6 +284,7 @@ button { border: 0; cursor: pointer; }
   .topbar-actions { justify-content: flex-start; margin-top: 12px; }
   .updated-chip { display: inline-flex; margin-top: 12px; }
   .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .cash-grid { grid-template-columns: 1fr; }
+  .grant-toolbar { grid-template-columns: 1fr; }
   .profit-row { grid-template-columns: 1fr 1fr; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }

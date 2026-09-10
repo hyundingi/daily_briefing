@@ -10,6 +10,8 @@ crons = ["*/30 * * * *"]
 
 [vars]
 GOV_PROJECT_KEYWORDS = "바이오,헬스,제약,의료,디지털헬스,R&D"
+BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do"
+NTIS_API_URL = "https://www.ntis.go.kr/rndopen/openApi/public_project?apprvKey={key}&collection=project&SRWR={keyword}&searchFd=BI&startPosition={page}&displayCnt={limit}"
 
 [[kv_namespaces]]
 binding = "BRIEFING_KV"

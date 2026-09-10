@@ -56,7 +56,7 @@ const MAX_STORED_ITEMS = 500;
 const RETENTION_DAYS = 30;
 const MAX_DISCLOSURE_TEXT_CHARS = 9000;
 const GOV_PROJECT_SOURCES = [
-  { key: "bizinfo", name: "기업마당", defaultUrl: BIZINFO_API_URL, keyEnv: "BIZINFO_API_KEY" },
+  { key: "bizinfo", name: "기업마당", urlEnv: "BIZINFO_API_URL", defaultUrl: BIZINFO_API_URL, keyEnv: "BIZINFO_API_KEY" },
   { key: "ntis", name: "NTIS", urlEnv: "NTIS_API_URL", keyEnv: "NTIS_API_KEY" },
   { key: "kstartup", name: "K-Startup", urlEnv: "KSTARTUP_API_URL", keyEnv: "KSTARTUP_API_KEY" },
   { key: "iris", name: "IRIS", urlEnv: "IRIS_API_URL", keyEnv: "IRIS_API_KEY" },
@@ -653,7 +653,7 @@ function newsFromDb(row) {
 async function governmentProjectsFromD1(env, cutoff = "") {
   if (!env.DB) return [];
   const since = cutoff || kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
-  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE first_seen_at >= ? ORDER BY CASE WHEN deadline IS NULL OR deadline = '' THEN 1 ELSE 0 END, deadline ASC, announcement_date DESC LIMIT 200`).bind(since).all();
+  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE first_seen_at >= ? ORDER BY CASE WHEN deadline IS NULL OR deadline = '' THEN 1 ELSE 0 END, deadline ASC, announcement_date DESC`).bind(since).all();
   return (rows.results || []).map(governmentProjectFromDb);
 }
 
@@ -873,7 +873,7 @@ async function collectNews(env, diagnostics) {
 async function collectGovernmentProjects(env, diagnostics) {
   const rows = [];
   for (const source of GOV_PROJECT_SOURCES) {
-    const urlTemplate = clean(source.defaultUrl || env[source.urlEnv]);
+    const urlTemplate = clean(env[source.urlEnv] || source.defaultUrl);
     if (!urlTemplate) {
       diagnostics.push({ step: `grant:${source.key}`, status: "missing_config", required: source.urlEnv });
       continue;
@@ -979,7 +979,7 @@ function governmentProjectUrl(template, apiKey, keyword) {
     .replaceAll("{keyword}", encodeURIComponent(keyword || ""))
     .replaceAll("{query}", encodeURIComponent(keyword || ""))
     .replaceAll("{page}", "1")
-    .replaceAll("{limit}", "20");
+    .replaceAll("{limit}", "100");
   return new URL(replaced).toString();
 }
 
@@ -1010,8 +1010,9 @@ function normalizeGovernmentProjects(payload, source, keyword) {
     const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "사업명", "공고명", "과제명", "name", "subject"]);
     if (!title) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "상세URL", "상세페이지url"]);
-    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"]));
-    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "pbancRcptBgngYmd", "pblancDe", "공고일", "등록일", "startYmd"]));
+    const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "접수기간", "신청기간"]);
+    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
     result.push({
       source: source.name,
       title: clean(title),
@@ -1068,6 +1069,22 @@ function normalizeGovernmentDate(value) {
   const compact = raw.match(/(20\d{2})(\d{2})(\d{2})/);
   if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
   return raw.slice(0, 20);
+}
+
+function periodStartDate(value) {
+  const dates = periodDates(value);
+  return dates[0] || "";
+}
+
+function periodEndDate(value) {
+  const dates = periodDates(value);
+  return dates[dates.length - 1] || "";
+}
+
+function periodDates(value) {
+  const raw = String(value || "");
+  const matches = raw.match(/20\d{2}[.\-/년\s]*\d{1,2}[.\-/월\s]*\d{1,2}/g) || [];
+  return matches.map(normalizeGovernmentDate).filter(Boolean);
 }
 
 function statusFromDeadline(deadline) {
@@ -1658,7 +1675,18 @@ function emptyBriefing() {
 }
 
 function clean(value) {
-  return String(value || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'");
 }
 
 function isoDate(value) {

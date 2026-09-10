@@ -135,7 +135,7 @@ export const APP_JS = String.raw`
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
-        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, todayDisclosures: todayDisclosures, todayNews: todayNews }) : null,
+        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
@@ -189,7 +189,7 @@ export const APP_JS = String.raw`
       ),
       h("section", { className: "dashboard-grid" },
         h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
-        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news }))
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
   }
@@ -289,8 +289,15 @@ export const APP_JS = String.raw`
   }
 
   function IntelligencePanel(props) {
-    var items = sortItems(props.disclosures.concat(props.news)).slice(0, 5);
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 경쟁사 브리핑", subtitle: "공시와 뉴스 탭에 쌓인 항목 중 최근 흐름만 대시보드에서 빠르게 봅니다.", pill: "요약 보기" }), h("div", { className: "intel-list" }, items.length ? items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "아직 표시할 공시나 뉴스가 없습니다."))));
+    var items = sortItems(props.disclosures.concat(props.news)).slice(0, 3);
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "오늘의 경쟁사 브리핑", subtitle: "공시와 뉴스 탭에 쌓인 항목 중 최근 흐름만 대시보드에서 빠르게 봅니다.", pill: "최대 3건" }),
+      h("div", { className: "intel-list" }, items.length ? items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "아직 표시할 공시나 뉴스가 없습니다.")),
+      h("div", { className: "panel-actions" },
+        h("button", { className: "ghost-button", onClick: function () { props.setActive("disclosures"); } }, "공시 전체 보기"),
+        h("button", { className: "ghost-button", onClick: function () { props.setActive("news"); } }, "뉴스 전체 보기")
+      )
+    ));
   }
 
   function DataPage(props) {
@@ -311,10 +318,17 @@ export const APP_JS = String.raw`
   }
 
   function GrantPanel(props) {
-    var grants = (props && props.grants ? props.grants : []).slice(0, props && props.expanded ? 20 : 5);
+    var searchState = React.useState("");
+    var search = searchState[0];
+    var setSearch = searchState[1];
+    var allGrants = props && props.grants ? props.grants : [];
+    var filtered = filterGrants(allGrants, search);
+    var grants = props && props.expanded ? filtered : filtered.slice(0, 3);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: grants.length ? grants.length + "건" : "연결 대기" }),
-      h("div", { className: "grant-list" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다."))
+      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: allGrants.length ? allGrants.length + "건" : "연결 대기" }),
+      props && props.expanded ? h("div", { className: "grant-toolbar" }, h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "공고명, 기관, 키워드 검색" }), h("span", { className: "result-count" }, "표시 " + grants.length + "건")) : null,
+      h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다.")),
+      props && !props.expanded && props.setActive ? h("div", { className: "panel-actions" }, h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "국책과제 전체 보기")) : null
     ));
   }
 
@@ -323,7 +337,7 @@ export const APP_JS = String.raw`
     return h("article", { className: "grant-card" },
       h("div", { className: "grant-top" }, h("span", { className: "dday-badge" }, ddayText(item.deadline)), h("span", { className: "grant-source" }, item.source || "국책과제")),
       h(item.link ? "a" : "p", { className: "mini-title", href: item.link || undefined, target: item.link ? "_blank" : undefined, rel: item.link ? "noreferrer" : undefined }, item.title || "제목 없음"),
-      h("p", { className: "mini-text" }, [item.agency, item.category, item.deadline ? "마감 " + item.deadline : "마감일 확인 필요"].filter(Boolean).join(" · ")),
+      h("p", { className: "mini-text" }, [item.agency, item.category, deadlineLabel(item.deadline)].filter(Boolean).join(" · ")),
       item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null,
       item.budget || item.target ? h("p", { className: "mini-text" }, [item.budget ? "지원규모: " + item.budget : "", item.target ? "대상: " + item.target : ""].filter(Boolean).join(" / ")) : null
     );
@@ -372,6 +386,14 @@ export const APP_JS = String.raw`
     });
   }
 
+  function filterGrants(items, query) {
+    var needle = String(query || "").toLowerCase().trim();
+    return items.filter(function (item) {
+      var text = [item.source, item.title, item.agency, item.category, item.summary, item.budget, item.target, item.keywords, item.deadline].join(" ").toLowerCase();
+      return !needle || text.indexOf(needle) >= 0;
+    }).sort(compareGrants);
+  }
+
   function sortItems(items) {
     return items.slice().sort(function (a, b) { return dateValue(b) - dateValue(a); });
   }
@@ -390,13 +412,26 @@ export const APP_JS = String.raw`
   }
 
   function compareGrants(a, b) {
-    var ad = a.deadline || "9999-12-31";
-    var bd = b.deadline || "9999-12-31";
-    return String(ad).localeCompare(String(bd));
+    var ad = sortableDeadline(a.deadline);
+    var bd = sortableDeadline(b.deadline);
+    return ad.localeCompare(bd);
+  }
+
+  function sortableDeadline(deadline) {
+    var raw = String(deadline || "").slice(0, 10);
+    return /^20\d{2}-\d{2}-\d{2}$/.test(raw) ? raw : "9999-12-31";
+  }
+
+  function deadlineLabel(deadline) {
+    var raw = String(deadline || "").trim();
+    if (!raw) return "마감일 확인 필요";
+    if (!/^20\d{2}-\d{2}-\d{2}/.test(raw)) return "마감 일정 미정";
+    return "마감 " + raw.slice(0, 10);
   }
 
   function ddayText(deadline) {
-    if (!deadline) return "D-?";
+    if (!deadline) return "일정 미정";
+    if (!/^20\d{2}-\d{2}-\d{2}/.test(String(deadline))) return "일정 미정";
     var today = new Date(TODAY + "T00:00:00+09:00");
     var end = new Date(String(deadline).slice(0, 10) + "T00:00:00+09:00");
     if (isNaN(end.getTime())) return "D-?";
@@ -411,7 +446,7 @@ export const APP_JS = String.raw`
   }
 
   function cleanSnippet(value) {
-    return String(value || "").replace(/<br\s*\/?>(\s*)/gi, " ").replace(/<[^>]+>/g, "").replace(/&quot;/g, "\"").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+    return String(value || "").replace(/<br\s*\/?>(\s*)/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/g, "\"").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
   }
 
   function formatDateTime(value) {
