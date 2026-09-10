@@ -291,12 +291,9 @@ export const APP_JS = String.raw`
   function IntelligencePanel(props) {
     var items = sortItems(props.disclosures.concat(props.news)).slice(0, 3);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "오늘의 경쟁사 브리핑", subtitle: "공시와 뉴스 탭에 쌓인 항목 중 최근 흐름만 대시보드에서 빠르게 봅니다.", pill: "최대 3건" }),
+      h(PanelHead, { title: "최신 공시·뉴스", subtitle: "최근 수집된 경쟁사 공시와 뉴스를 빠르게 확인합니다.", actions: [h("button", { className: "ghost-button", onClick: function () { props.setActive("disclosures"); } }, "공시 전체보기"), h("button", { className: "ghost-button", onClick: function () { props.setActive("news"); } }, "뉴스 전체보기")] }),
       h("div", { className: "intel-list" }, items.length ? items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "아직 표시할 공시나 뉴스가 없습니다.")),
-      h("div", { className: "panel-actions" },
-        h("button", { className: "ghost-button", onClick: function () { props.setActive("disclosures"); } }, "공시 전체 보기"),
-        h("button", { className: "ghost-button", onClick: function () { props.setActive("news"); } }, "뉴스 전체 보기")
-      )
+      null
     ));
   }
 
@@ -325,16 +322,16 @@ export const APP_JS = String.raw`
     var filtered = filterGrants(allGrants, search);
     var grants = props && props.expanded ? filtered : filtered.slice(0, 3);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: allGrants.length ? allGrants.length + "건" : "연결 대기" }),
+      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: props && props.expanded && allGrants.length ? allGrants.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
       props && props.expanded ? h("div", { className: "grant-toolbar" }, h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "공고명, 기관, 키워드 검색" }), h("span", { className: "result-count" }, "표시 " + grants.length + "건")) : null,
-      h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다.")),
-      props && !props.expanded && props.setActive ? h("div", { className: "panel-actions" }, h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "국책과제 전체 보기")) : null
+      h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item, compact: !(props && props.expanded) }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다.")),
+      null
     ));
   }
 
   function GrantCard(props) {
     var item = props.item;
-    return h("article", { className: "grant-card" },
+    return h("article", { className: props.compact ? "grant-card compact" : "grant-card" },
       h("div", { className: "grant-top" }, h("span", { className: "dday-badge" }, ddayText(item.deadline)), h("span", { className: "grant-source" }, item.source || "국책과제")),
       h(item.link ? "a" : "p", { className: "mini-title", href: item.link || undefined, target: item.link ? "_blank" : undefined, rel: item.link ? "noreferrer" : undefined }, item.title || "제목 없음"),
       h("p", { className: "mini-text" }, [item.agency, item.category, deadlineLabel(item.deadline)].filter(Boolean).join(" · ")),
@@ -348,7 +345,7 @@ export const APP_JS = String.raw`
   }
 
   function PanelHead(props) {
-    return h("div", { className: "panel-head" }, h("div", null, h("h2", { className: "panel-title" }, props.title), props.subtitle ? h("p", { className: "panel-subtitle" }, props.subtitle) : null), props.pill ? h("span", { className: "pill" }, props.pill) : null);
+    return h("div", { className: "panel-head" }, h("div", null, h("h2", { className: "panel-title" }, props.title), props.subtitle ? h("p", { className: "panel-subtitle" }, props.subtitle) : null), h("div", { className: "panel-head-side" }, props.pill ? h("span", { className: "pill" }, props.pill) : null, props.actions || null));
   }
 
   function ItemCard(props) {
@@ -374,7 +371,7 @@ export const APP_JS = String.raw`
   function Ticker(props) {
     var items = (props.news || []).slice(0, 18);
     if (!items.length) return null;
-    return h("div", { className: "ticker" }, h("div", { className: "ticker-track" }, items.concat(items).map(function (item, index) { return h("span", { className: "ticker-item", key: index }, (item.company || "") + " · " + (item.title || "")); })));
+    return h("div", { className: "ticker" }, h("div", { className: "ticker-track" }, items.concat(items).map(function (item, index) { var url = item.url || item.link || "#"; return h("a", { className: "ticker-item", key: index, href: url, target: "_blank", rel: "noreferrer" }, (item.company || "") + " · " + (item.title || "")); })));
   }
 
   function filterItems(items, company, query) {

@@ -686,7 +686,9 @@ function governmentProjectStatement(env, item, nowText) {
 }
 
 function governmentProjectKey(item) {
-  return `${item.source}:${normalize(item.title)}:${item.deadline || item.announcement_date || ""}`;
+  const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+  if (externalId) return `${item.source}:${clean(externalId)}`;
+  return `${item.source}:${normalize(item.title)}`;
 }
 
 async function financialMetricsFromD1(env) {
@@ -991,7 +993,7 @@ function parseGovernmentPayload(text, contentType) {
 }
 
 function xmlItems(xml) {
-  const matches = xml.match(/<(item|row|list|data)[^>]*>[\s\S]*?<\/\1>/gi) || [];
+  const matches = xml.match(/<(item|row|list|data|HIT)[^>]*>[\s\S]*?<\/\1>/gi) || [];
   return matches.map((block) => {
     const row = {};
     const fieldMatches = block.matchAll(/<([A-Za-z0-9_:\-가-힣]+)[^>]*>([\s\S]*?)<\/\1>/g);
@@ -1007,18 +1009,20 @@ function xmlItems(xml) {
 function normalizeGovernmentProjects(payload, source, keyword) {
   const result = [];
   for (const row of findGovernmentRows(payload)) {
-    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "사업명", "공고명", "과제명", "name", "subject"]);
+    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
     if (!title) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "상세URL", "상세페이지url"]);
-    const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "접수기간", "신청기간"]);
-    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
-    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "접수기간", "신청기간"]);
+    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
     result.push({
       source: source.name,
+      external_id: externalId,
       title: clean(title),
-      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "기관명", "소관부처", "department", "organNm"])),
+      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
       category: clean(firstField(row, ["category", "bizCategory", "supportType", "분야", "사업분류"])) || keyword,
-      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "사업내용", "지원내용", "사업소개정보"])),
+      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
       link: link ? String(link).trim() : "",
       announcement_date: announcementDate,
       deadline,
