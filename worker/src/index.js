@@ -9,6 +9,7 @@ const DART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml";
 const DART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json";
 const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
+const BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do";
 
 const TARGET_COMPANIES = [
   { name: "동아에스티", corpCode: "00956930", aliases: ["동아에스티"] },
@@ -55,7 +56,7 @@ const MAX_STORED_ITEMS = 500;
 const RETENTION_DAYS = 30;
 const MAX_DISCLOSURE_TEXT_CHARS = 9000;
 const GOV_PROJECT_SOURCES = [
-  { key: "bizinfo", name: "기업마당", urlEnv: "BIZINFO_API_URL", keyEnv: "BIZINFO_API_KEY" },
+  { key: "bizinfo", name: "기업마당", defaultUrl: BIZINFO_API_URL, keyEnv: "BIZINFO_API_KEY" },
   { key: "ntis", name: "NTIS", urlEnv: "NTIS_API_URL", keyEnv: "NTIS_API_KEY" },
   { key: "kstartup", name: "K-Startup", urlEnv: "KSTARTUP_API_URL", keyEnv: "KSTARTUP_API_KEY" },
   { key: "iris", name: "IRIS", urlEnv: "IRIS_API_URL", keyEnv: "IRIS_API_KEY" },
@@ -872,7 +873,7 @@ async function collectNews(env, diagnostics) {
 async function collectGovernmentProjects(env, diagnostics) {
   const rows = [];
   for (const source of GOV_PROJECT_SOURCES) {
-    const urlTemplate = clean(env[source.urlEnv]);
+    const urlTemplate = clean(source.defaultUrl || env[source.urlEnv]);
     if (!urlTemplate) {
       diagnostics.push({ step: `grant:${source.key}`, status: "missing_config", required: source.urlEnv });
       continue;
@@ -963,6 +964,14 @@ function configuredGovernmentKeywords(env) {
 }
 
 function governmentProjectUrl(template, apiKey, keyword) {
+  if (template === BIZINFO_API_URL) {
+    const url = new URL(BIZINFO_API_URL);
+    url.searchParams.set("crtfcKey", apiKey || "");
+    url.searchParams.set("dataType", "json");
+    url.searchParams.set("searchCnt", "100");
+    url.searchParams.set("hashtags", keyword || "");
+    return url.toString();
+  }
   const replaced = template
     .replaceAll("{key}", encodeURIComponent(apiKey || ""))
     .replaceAll("{apiKey}", encodeURIComponent(apiKey || ""))

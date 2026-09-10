@@ -1,4 +1,4 @@
-# Competitor Newsletter
+# 경영기획팀 Insight Board
 
 경쟁사 10개사의 DART 공시와 최신 뉴스를 수집해 웹페이지와 뉴스레터로 확인하고, 경영기획팀 업무 지표를 한 화면에 모으는 대시보드 프로젝트입니다.
 
@@ -197,7 +197,7 @@ D1 DB 테이블 생성 파일입니다.
 - 공고일, 마감일, 모집 상태
 - 지원규모, 지원대상, 검색 키워드
 
-국책과제 API URL은 공식 기관 도메인 allowlist에 있는 주소만 호출합니다. 임의 외부 URL로 API 키가 나가지 않도록 막아두었습니다.
+기업마당은 공식 지원사업정보 API URL을 코드에 고정해두었으므로 `BIZINFO_API_KEY`만 있으면 수집할 수 있습니다. NTIS, K-Startup, IRIS, KHIDI는 신청한 API 서비스별 요청 URL이 달라질 수 있어 URL 설정값을 사용합니다. URL 설정값은 공식 기관 도메인 allowlist에 있는 주소만 호출합니다.
 
 ### `worker/migrations/0005_financial_metrics.sql`
 
@@ -257,13 +257,13 @@ Cloudflare Worker에 아래 secrets가 필요합니다.
 국책과제 API 선택값:
 
 - `GOV_PROJECT_KEYWORDS`: 국책과제 검색 키워드입니다. 기본값은 `바이오,헬스,제약,의료,디지털헬스,임상,R&D,연구개발`입니다.
-- `BIZINFO_API_URL`, `BIZINFO_API_KEY`: 기업마당 API URL/키입니다.
-- `NTIS_API_URL`, `NTIS_API_KEY`: NTIS API URL/키입니다.
+- `BIZINFO_API_KEY`: 기업마당 API 인증키입니다. URL은 코드에 고정되어 있습니다.
+- `NTIS_API_URL`, `NTIS_API_KEY`: NTIS API URL/키입니다. NTIS는 신청한 서비스 종류에 따라 요청 URL이 달라질 수 있습니다.
 - `KSTARTUP_API_URL`, `KSTARTUP_API_KEY`: K-Startup API URL/키입니다.
 - `IRIS_API_URL`, `IRIS_API_KEY`: IRIS API URL/키입니다.
 - `KHIDI_API_URL`, `KHIDI_API_KEY`: KHIDI API URL/키입니다.
 
-API URL에는 `{keyword}`를 검색어 위치에 넣고, 인증키가 필요한 API는 `{key}` 또는 `{serviceKey}`를 키 위치에 넣습니다. 실제 값은 발급받은 공식 API 문서의 요청 URL을 기준으로 작성합니다.
+NTIS, K-Startup, IRIS, KHIDI API URL에는 `{keyword}`를 검색어 위치에 넣고, 인증키가 필요한 API는 `{key}` 또는 `{serviceKey}`를 키 위치에 넣습니다. 실제 값은 발급받은 공식 API 문서의 요청 URL을 기준으로 작성합니다.
 
 선택값:
 

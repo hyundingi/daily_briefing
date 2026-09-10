@@ -4,7 +4,7 @@ export function renderPage() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>경영기획팀 Dashboard</title>
+  <title>경영기획팀 Insight Board</title>
   <link rel="stylesheet" href="/assets/styles.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@ export function renderPage() {
     <div class="boot-screen">
       <div class="boot-mark">MP</div>
       <div>
-        <p class="boot-title">경영기획팀 Dashboard</p>
+        <p class="boot-title">경영기획팀 Insight Board</p>
         <p class="boot-subtitle">데이터를 불러오는 중입니다.</p>
       </div>
     </div>

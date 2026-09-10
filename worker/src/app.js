@@ -158,7 +158,7 @@ export const APP_JS = String.raw`
     return h("aside", { className: "sidebar" },
       h("div", { className: "brand" },
         h("div", { className: "brand-mark" }, "MP"),
-        h("div", null, h("p", { className: "brand-eyebrow" }, "MANAGEMENT PLANNING"), h("p", { className: "brand-title" }, "경영기획팀 Dashboard"))
+        h("div", null, h("p", { className: "brand-eyebrow" }, "MANAGEMENT PLANNING"), h("p", { className: "brand-title" }, "경영기획팀 Insight Board"))
       ),
       h("nav", { className: "nav-group" }, NAV_ITEMS.map(function (item) {
         return h("button", { key: item[0], className: props.active === item[0] ? "nav-button active" : "nav-button", onClick: function () { props.setActive(item[0]); } },
@@ -171,7 +171,7 @@ export const APP_JS = String.raw`
 
   function Topbar(props) {
     return h("header", { className: "topbar" },
-      h("div", null, h("p", { className: "page-kicker" }, "Daily Business Intelligence"), h("h1", { className: "page-title" }, "경영기획팀 의사결정 허브"), h("p", { className: "page-desc" }, "경쟁사 공시와 뉴스, 재무 지표, 실적 관리, 일정과 국책과제 정보를 한 화면에서 볼 수 있도록 확장하는 첫 화면입니다.")),
+      h("div", null, h("p", { className: "page-kicker" }, "Insight Board"), h("h1", { className: "page-title" }, "경영기획팀 Insight Board"), h("p", { className: "page-desc" }, "경쟁사 공시와 뉴스, 재무 지표, 실적 관리, 일정과 국책과제 정보를 한 화면에서 볼 수 있도록 확장하는 첫 화면입니다.")),
       h("div", { className: "topbar-actions" },
         h("div", { className: "updated-chip" }, "데이터 업데이트: " + formatDateTime(props.data && props.data.updated_at)),
         h("button", { className: "ghost-button", onClick: function () { props.setActive("archive"); } }, "뉴스레터 아카이브")

@@ -8,6 +8,9 @@ region = "gcp:asia-northeast3"
 [triggers]
 crons = ["*/30 * * * *"]
 
+[vars]
+GOV_PROJECT_KEYWORDS = "바이오,헬스,제약,의료,디지털헬스,R&D"
+
 [[kv_namespaces]]
 binding = "BRIEFING_KV"
 id = "YOUR_KV_NAMESPACE_ID"
