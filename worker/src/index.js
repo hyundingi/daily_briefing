@@ -212,6 +212,7 @@ async function refreshWithD1(env) {
   const collectedDisclosures = await collectDisclosures(env, diagnostics);
   const collectedNews = await collectNews(env, diagnostics);
   const collectedGovernmentProjects = await collectGovernmentProjects(env, diagnostics);
+  await reuseExistingGovernmentProjectIds(env.DB, collectedGovernmentProjects);
   ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
 
   const now = new Date();
@@ -257,6 +258,7 @@ async function refreshGovernmentProjects(request, env) {
   const now = new Date();
   const nowText = kstTimestamp(now);
   const collected = await collectGovernmentProjects(env, diagnostics);
+  await reuseExistingGovernmentProjectIds(env.DB, collected);
   const fresh = await filterNewRows(env.DB, "government_projects", collected, governmentProjectKey);
   const statements = collected.map((item) => governmentProjectStatement(env, item, nowText));
   if (statements.length) await env.DB.batch(statements);
@@ -650,6 +652,23 @@ function newsFromDb(row) {
   return { type: "news", company: row.company, category: row.category, title: row.title, summary: row.summary, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important };
 }
 
+async function reuseExistingGovernmentProjectIds(db, rows) {
+  if (!db || !rows || !rows.length) return;
+  const existing = await db.prepare("SELECT id, source, title, raw_json FROM government_projects").all();
+  const byExternalId = new Map();
+  const byTitle = new Map();
+  for (const row of existing.results || []) {
+    const raw = parseJson(row.raw_json, {});
+    const externalId = firstField(raw, ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+    if (externalId) byExternalId.set(`${row.source}:${clean(externalId)}`, row.id);
+    if (row.title) byTitle.set(`${row.source}:${normalize(row.title)}`, row.id);
+  }
+  for (const item of rows) {
+    const idKey = item.external_id ? `${item.source}:${clean(item.external_id)}` : "";
+    item.existing_id = (idKey && byExternalId.get(idKey)) || byTitle.get(`${item.source}:${normalize(item.title)}`) || "";
+  }
+}
+
 async function governmentProjectsFromD1(env, cutoff = "") {
   if (!env.DB) return [];
   const since = cutoff || kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
@@ -686,6 +705,7 @@ function governmentProjectStatement(env, item, nowText) {
 }
 
 function governmentProjectKey(item) {
+  if (item.existing_id) return item.existing_id;
   const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
   if (externalId) return `${item.source}:${clean(externalId)}`;
   return `${item.source}:${normalize(item.title)}`;
