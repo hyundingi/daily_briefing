@@ -1026,33 +1026,42 @@ function xmlItems(xml) {
   const matches = xml.match(/<(item|row|list|data|HIT)[^>]*>[\s\S]*?<\/\1>/gi) || [];
   return matches.map((block) => {
     const row = {};
-    const fieldMatches = block.matchAll(/<([A-Za-z0-9_:\-가-힣]+)[^>]*>([\s\S]*?)<\/\1>/g);
-    for (const match of fieldMatches) {
-      const key = match[1].replace(/^.*:/, "");
-      const value = decodeXml(match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
-      if (value && !row[key]) row[key] = value;
-    }
+    const inner = block.replace(/^<([A-Za-z0-9_:\-가-힣]+)[^>]*>/, "").replace(/<\/([A-Za-z0-9_:\-가-힣]+)>\s*$/i, "");
+    collectXmlFields(inner, row, "");
     return row;
   });
+}
+
+function collectXmlFields(xml, row, prefix) {
+  const fieldMatches = Array.from(String(xml || "").matchAll(/<([A-Za-z0-9_:\-가-힣]+)[^>]*>([\s\S]*?)<\/\1>/g));
+  for (const match of fieldMatches) {
+    const key = match[1].replace(/^.*:/, "");
+    const body = match[2] || "";
+    const pathKey = prefix ? `${prefix}_${key}` : key;
+    const value = decodeXml(body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+    if (value && !row[key]) row[key] = value;
+    if (value && !row[pathKey]) row[pathKey] = value;
+    if (/<[A-Za-z0-9_:\-가-힣]+[^>]*>/.test(body)) collectXmlFields(body, row, pathKey);
+  }
 }
 
 function normalizeGovernmentProjects(payload, source, keyword) {
   const result = [];
   for (const row of findGovernmentRows(payload)) {
-    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
+    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "ProjectTitle_Korean", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
     if (!title) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "상세URL", "상세페이지url"]);
     const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "접수기간", "신청기간"]);
-    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
-    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
     const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
     result.push({
       source: source.name,
       external_id: externalId,
       title: clean(title),
-      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
+      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
       category: clean(firstField(row, ["category", "bizCategory", "supportType", "분야", "사업분류"])) || keyword,
-      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
+      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "Goal_Full", "Abstract_Full", "Effect_Full", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
       link: link ? String(link).trim() : "",
       announcement_date: announcementDate,
       deadline,
