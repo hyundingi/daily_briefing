@@ -10,6 +10,9 @@ const DART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json";
 const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 const BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do";
+const KSTARTUP_API_URL = "https://nidview.k-startup.go.kr/view/public/call/kisedKstartupService/announcementInformation";
+const KHIDI_LIST_URL = "https://www.khidi.or.kr/board?menuId=MENU00101";
+const IRIS_MAIN_URL = "https://iris.go.kr/main.do";
 
 const TARGET_COMPANIES = [
   { name: "동아에스티", corpCode: "00956930", aliases: ["동아에스티"] },
@@ -58,9 +61,9 @@ const MAX_DISCLOSURE_TEXT_CHARS = 9000;
 const GOV_PROJECT_SOURCES = [
   { key: "bizinfo", name: "기업마당", urlEnv: "BIZINFO_API_URL", defaultUrl: BIZINFO_API_URL, keyEnv: "BIZINFO_API_KEY" },
   { key: "ntis", name: "NTIS", urlEnv: "NTIS_API_URL", keyEnv: "NTIS_API_KEY" },
-  { key: "kstartup", name: "K-Startup", urlEnv: "KSTARTUP_API_URL", keyEnv: "KSTARTUP_API_KEY" },
-  { key: "iris", name: "IRIS", urlEnv: "IRIS_API_URL", keyEnv: "IRIS_API_KEY" },
-  { key: "khidi", name: "KHIDI", urlEnv: "KHIDI_API_URL", keyEnv: "KHIDI_API_KEY" },
+  { key: "kstartup", name: "K-Startup", urlEnv: "KSTARTUP_API_URL", defaultUrl: KSTARTUP_API_URL },
+  { key: "iris", name: "IRIS", urlEnv: "IRIS_API_URL", defaultUrl: IRIS_MAIN_URL, keywordless: true },
+  { key: "khidi", name: "KHIDI", urlEnv: "KHIDI_API_URL", defaultUrl: KHIDI_LIST_URL, keywordless: true },
 ];
 const GOV_PROJECT_ALLOWED_HOSTS = new Set([
   "www.bizinfo.go.kr",
@@ -696,7 +699,7 @@ async function reuseExistingGovernmentProjectIds(db, rows) {
   const byTitle = new Map();
   for (const row of existing.results || []) {
     const raw = parseJson(row.raw_json, {});
-    const externalId = firstField(raw, ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+    const externalId = firstField(raw, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
     if (externalId) byExternalId.set(`${row.source}:${clean(externalId)}`, row.id);
     if (row.title) byTitle.set(`${row.source}:${normalize(row.title)}`, row.id);
   }
@@ -743,7 +746,7 @@ function governmentProjectStatement(env, item, nowText) {
 
 function governmentProjectKey(item) {
   if (item.existing_id) return item.existing_id;
-  const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+  const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
   if (externalId) return `${item.source}:${clean(externalId)}`;
   return `${item.source}:${normalize(item.title)}`;
 }
@@ -942,7 +945,8 @@ async function collectGovernmentProjects(env, diagnostics) {
       diagnostics.push({ step: `grant:${source.key}`, status: "missing_secret", required: source.keyEnv });
       continue;
     }
-    for (const keyword of configuredGovernmentKeywords(env)) {
+    const sourceKeywords = source.keywordless ? [""] : configuredGovernmentKeywords(env);
+    for (const keyword of sourceKeywords) {
       try {
         const url = governmentProjectUrl(urlTemplate, apiKey, keyword);
         const host = new URL(url).hostname;
@@ -965,6 +969,7 @@ async function collectGovernmentProjects(env, diagnostics) {
           diagnostic.hit_tags = (text.match(/<HIT\b/gi) || []).length;
           diagnostic.item_tags = (text.match(/<(item|row|list|data)\b/gi) || []).length;
         }
+        if (source.keywordless) diagnostic.keyword = "전체";
         diagnostics.push(diagnostic);
       } catch (error) {
         diagnostics.push({ step: `grant:${source.key}`, keyword, status: "exception", error: safeError(error) });
@@ -1041,6 +1046,22 @@ function governmentProjectUrl(template, apiKey, keyword) {
     url.searchParams.set("hashtags", keyword || "");
     return url.toString();
   }
+  if (template === KSTARTUP_API_URL || template.includes("/kisedKstartupService/announcementInformation")) {
+    const url = new URL(template, "https://nidview.k-startup.go.kr");
+    url.searchParams.set("page", "1");
+    url.searchParams.set("perPage", "100");
+    if (keyword) url.searchParams.set("cond[biz_pbanc_nm::LIKE]", keyword);
+    url.searchParams.set("cond[rcrt_prgs_yn::EQ]", "Y");
+    return url.toString();
+  }
+  if (template === KHIDI_LIST_URL || template.includes("khidi.or.kr/board")) {
+    const url = new URL(template, "https://www.khidi.or.kr");
+    url.searchParams.set("menuId", url.searchParams.get("menuId") || "MENU00101");
+    url.searchParams.set("pageNum", "1");
+    url.searchParams.set("rowCnt", "30");
+    if (keyword) url.searchParams.set("schText", keyword);
+    return url.toString();
+  }
   const replaced = template
     .replaceAll("{key}", encodeURIComponent(apiKey || ""))
     .replaceAll("{apiKey}", encodeURIComponent(apiKey || ""))
@@ -1056,7 +1077,76 @@ function parseGovernmentPayload(text, contentType) {
   const trimmed = String(text || "").trim();
   if (!trimmed) return [];
   if (contentType.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) return JSON.parse(trimmed);
+  if (contentType.includes("html") || /<html[\s>]/i.test(trimmed)) {
+    const rows = htmlGovernmentItems(trimmed);
+    if (rows.length) return rows;
+  }
   return xmlItems(trimmed);
+}
+
+function htmlGovernmentItems(html) {
+  return [...khidiHtmlItems(html), ...irisHtmlItems(html)];
+}
+
+function khidiHtmlItems(html) {
+  if (!html.includes("MENU00101") && !html.includes("입찰정보")) return [];
+  const rows = [];
+  const trMatches = String(html || "").match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+  for (const tr of trMatches) {
+    if (!tr.includes("/board/view")) continue;
+    const cells = Array.from(tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map((match) => match[1]);
+    if (cells.length < 5) continue;
+    const linkMatch = tr.match(/href=["']([^"']*\/board\/view[^"']*)["']/i);
+    const link = linkMatch ? absoluteUrl(decodeHtmlEntities(linkMatch[1]), "https://www.khidi.or.kr") : "";
+    const idMatch = String(link).match(/[?&](?:linkId|no1)=([^&]+)/i);
+    rows.push({
+      id: idMatch ? idMatch[1] : clean(cells[0]),
+      title: clean(cells[2]),
+      category: clean(cells[1]) || "KHIDI 공고",
+      agency: "한국보건산업진흥원",
+      deadline: clean(cells[3]),
+      announcementDate: clean(cells[4]),
+      status: clean(cells[6]) || "공고",
+      link,
+      summary: clean(cells[2]),
+    });
+  }
+  return rows;
+}
+
+function irisHtmlItems(html) {
+  if (!html.includes("item-biz") || !html.includes("사업공고")) return [];
+  const rows = [];
+  const matches = String(html || "").match(/<div class="item-biz">[\s\S]*?<\/a>\s*<\/div>/gi) || [];
+  for (const block of matches) {
+    const title = textFromHtmlClass(block, "title");
+    if (!title) continue;
+    const viewMatch = block.match(/f_bsnsAncmBtinSituListForm_view\('([^']+)'\s*,\s*'([^']+)'\)/i);
+    const period = textFromHtmlClass(block, "period");
+    const departments = Array.from(block.matchAll(/<p class="department">([\s\S]*?)<\/p>/gi)).map((match) => clean(match[1])).filter(Boolean);
+    rows.push({
+      id: viewMatch ? viewMatch[1] : title,
+      title,
+      category: departments[0] || "IRIS 사업공고",
+      agency: departments[1] || departments[0] || "IRIS",
+      period,
+      deadline: periodEndDate(period),
+      announcementDate: periodStartDate(period),
+      status: clean((block.match(/<span class="status[^>]*">([\s\S]*?)<\/span>/i) || [])[1]) || "사업공고",
+      link: viewMatch ? `https://www.iris.go.kr/contents/retrieveBsnsAncmBtinSituListView.do?ancmId=${encodeURIComponent(viewMatch[1])}` : "https://iris.go.kr/main.do",
+      summary: [departments[0], period].filter(Boolean).join(" · "),
+    });
+  }
+  return rows;
+}
+
+function textFromHtmlClass(html, className) {
+  const pattern = new RegExp(`<[^>]+class=["'][^"']*${className}[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`, "i");
+  return clean((String(html || "").match(pattern) || [])[1]);
+}
+
+function absoluteUrl(value, base) {
+  try { return new URL(value, base).toString(); } catch (_) { return clean(value); }
 }
 
 function xmlItems(xml) {
@@ -1085,26 +1175,26 @@ function collectXmlFields(xml, row, prefix) {
 function normalizeGovernmentProjects(payload, source, keyword) {
   const result = [];
   for (const row of findGovernmentRows(payload)) {
-    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_sj", "ProjectTitle_Korean", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
+    const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_pbanc_nm", "intg_pbanc_biz_nm", "biz_sj", "ProjectTitle_Korean", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
     if (!title) continue;
-    const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "상세URL", "상세페이지url"]);
+    const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "detl_pg_url", "biz_gdnc_url", "biz_aply_url", "상세URL", "상세페이지url"]);
     const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "접수기간", "신청기간"]);
-    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
-    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
-    const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
+    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pbanc_rcpt_bgng_dt", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
     result.push({
       source: source.name,
       external_id: externalId,
       title: clean(title),
-      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
-      category: clean(firstField(row, ["category", "bizCategory", "supportType", "분야", "사업분류"])) || keyword,
-      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "bsnsSumryCn", "Goal_Full", "Abstract_Full", "Effect_Full", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
+      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "sprv_inst", "pbanc_ntrp_nm", "biz_prch_dprt_nm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
+      category: clean(firstField(row, ["category", "bizCategory", "supportType", "supt_biz_clsfc", "분야", "사업분류"])) || keyword,
+      summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "pbanc_ctnt", "bsnsSumryCn", "Goal_Full", "Abstract_Full", "Effect_Full", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
       link: link ? String(link).trim() : "",
       announcement_date: announcementDate,
       deadline,
       status: clean(firstField(row, ["status", "recruitmentStatus", "접수상태", "공고상태"])) || statusFromDeadline(deadline),
       budget: clean(firstField(row, ["budget", "supportBudget", "사업지원예산정보", "지원규모", "지원금액"])),
-      target: clean(firstField(row, ["target", "supportTarget", "사업지원대상정보", "지원대상", "대상"])),
+      target: clean(firstField(row, ["target", "supportTarget", "aply_trgt", "aply_trgt_ctnt", "사업지원대상정보", "지원대상", "대상"])),
       keywords: keyword,
       raw_json: JSON.stringify(row).slice(0, 5000),
     });
@@ -1849,3 +1939,4 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
