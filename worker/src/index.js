@@ -1191,8 +1191,9 @@ function normalizeGovernmentProjects(payload, source, keyword) {
     if (!title || title.includes("{{") || title.includes("}}")) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "detl_pg_url", "biz_gdnc_url", "biz_aply_url", "상세URL", "상세페이지url"]);
     const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "content", "title", "접수기간", "신청기간"]);
-    const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
     const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "date", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pbanc_rcpt_bgng_dt", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const explicitDeadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"]));
+    const deadline = explicitDeadline || periodEndDate(period, announcementDate);
     const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "linkid", "titleid", "boardid", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
     result.push({
       source: source.name,
@@ -1258,15 +1259,48 @@ function periodStartDate(value) {
   return dates[0] || "";
 }
 
-function periodEndDate(value) {
-  const dates = periodDates(value);
+function periodEndDate(value, referenceDate) {
+  const dates = periodDates(value, referenceDate);
   return dates[dates.length - 1] || "";
 }
 
-function periodDates(value) {
+function periodDates(value, referenceDate) {
   const raw = String(value || "");
-  const matches = raw.match(/20\d{2}[.\-/년\s]*\d{1,2}[.\-/월\s]*\d{1,2}/g) || [];
-  return matches.map(normalizeGovernmentDate).filter(Boolean);
+  const dates = [];
+  const seen = new Set();
+  const addDate = (date) => {
+    const normalized = normalizeGovernmentDate(date);
+    if (normalized && /^20\d{2}-\d{2}-\d{2}$/.test(normalized) && !seen.has(normalized)) {
+      seen.add(normalized);
+      dates.push(normalized);
+    }
+  };
+  const fullMatches = raw.match(/20\d{2}[.\-/년\s]*\d{1,2}[.\-/월\s]*\d{1,2}/g) || [];
+  fullMatches.forEach(addDate);
+  const inferredYear = inferredDateYear(referenceDate);
+  const leadingMatches = raw.matchAll(/(?:~|〜|까지|마감|기한|접수기간|신청기간|연장|접수)[^0-9]{0,18}(\d{1,2})\s*[.\/월]\s*(\d{1,2})/g);
+  for (const match of leadingMatches) addMonthDayDate(dates, seen, inferredYear, match[1], match[2]);
+  const trailingMatches = raw.matchAll(/(\d{1,2})\s*[.\/월]\s*(\d{1,2})\s*(?:일|\([^)]*\))?\s*(?:까지|마감|접수|기한)/g);
+  for (const match of trailingMatches) addMonthDayDate(dates, seen, inferredYear, match[1], match[2]);
+  return dates;
+}
+
+function inferredDateYear(referenceDate) {
+  const normalized = normalizeGovernmentDate(referenceDate);
+  const match = normalized.match(/^(20\d{2})/);
+  if (match) return match[1];
+  return kstDateKey(new Date()).slice(0, 4);
+}
+
+function addMonthDayDate(dates, seen, year, monthValue, dayValue) {
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  if (!Number.isFinite(month) || !Number.isFinite(day) || month < 1 || month > 12 || day < 1 || day > 31) return;
+  const normalized = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (!seen.has(normalized)) {
+    seen.add(normalized);
+    dates.push(normalized);
+  }
 }
 
 function statusFromDeadline(deadline) {
@@ -1951,6 +1985,8 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
 
 
 
