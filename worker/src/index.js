@@ -956,7 +956,7 @@ async function collectGovernmentProjects(env, diagnostics) {
           diagnostics.push({ step: `grant:${source.key}`, keyword, status: "blocked_host", host });
           continue;
         }
-        const response = await fetch(url, { headers: { Accept: "application/json, application/xml, text/xml, */*" } });
+        const response = await fetch(url, { headers: { Accept: "application/json, application/xml, text/xml, text/html, */*", "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 competitor-newsletter/1.0" } });
         const text = await response.text();
         if (!response.ok) {
           diagnostics.push({ step: `grant:${source.key}`, keyword, status: "http_error", http_status: response.status, body: text.slice(0, 160) });
@@ -1944,6 +1944,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 
