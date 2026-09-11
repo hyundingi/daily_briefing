@@ -333,7 +333,7 @@ export const APP_JS = String.raw`
     var filtered = filterGrants(allGrants, { query: search, source: source, topic: topic, includeClosed: includeClosed });
     var grants = props && props.expanded ? filtered : filtered.slice(0, 3);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·K-Startup·IRIS 공고를 마감일 가까운 순으로 봅니다. NTIS와 KHIDI는 연결 보류 상태입니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
+      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·K-Startup·IRIS·KHIDI 공고를 마감일 가까운 순으로 봅니다. NTIS는 승인/IP 등록 대기 상태입니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
       props && props.expanded ? h("div", { className: "grant-toolbar" },
         h("div", { className: "grant-filter-group" },
           h("select", { className: "field", value: source, onChange: function (event) { setSource(event.target.value); } }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
@@ -498,4 +498,5 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 

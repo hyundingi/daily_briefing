@@ -11,7 +11,7 @@ const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 const BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do";
 const KSTARTUP_API_URL = "https://nidview.k-startup.go.kr/view/public/call/kisedKstartupService/announcementInformation";
-const KHIDI_LIST_URL = "https://www.khidi.or.kr/board?menuId=MENU00101";
+const KHIDI_LIST_URL = "https://www.khidi.or.kr/kps/openAPI/requestxml?rowCnt=100&menuId=MENU01108";
 const IRIS_MAIN_URL = "https://iris.go.kr/main.do";
 
 const TARGET_COMPANIES = [
@@ -701,7 +701,7 @@ async function reuseExistingGovernmentProjectIds(db, rows) {
   const byTitle = new Map();
   for (const row of existing.results || []) {
     const raw = parseJson(row.raw_json, {});
-    const externalId = firstField(raw, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+    const externalId = firstField(raw, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "linkid", "titleid", "boardid", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
     if (externalId) byExternalId.set(`${row.source}:${clean(externalId)}`, row.id);
     if (row.title) byTitle.set(`${row.source}:${normalize(row.title)}`, row.id);
   }
@@ -748,7 +748,7 @@ function governmentProjectStatement(env, item, nowText) {
 
 function governmentProjectKey(item) {
   if (item.existing_id) return item.existing_id;
-  const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
+  const externalId = item.external_id || firstField(parseJson(item.raw_json, {}), ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "linkid", "titleid", "boardid", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]);
   if (externalId) return `${item.source}:${clean(externalId)}`;
   return `${item.source}:${normalize(item.title)}`;
 }
@@ -1154,6 +1154,13 @@ function absoluteUrl(value, base) {
   try { return new URL(value, base).toString(); } catch (_) { return clean(value); }
 }
 
+function khidiDetailUrl(row) {
+  const linkId = clean(firstField(row, ["linkid", "linkId"]));
+  const menuId = clean(firstField(row, ["menuid", "menuId"])) || "MENU01108";
+  if (!linkId) return "";
+  return `https://www.khidi.or.kr/kps/openAPI/onpenRequestBorad?appId=1&linkId=${encodeURIComponent(linkId)}&menuId=${encodeURIComponent(menuId)}`;
+}
+
 function xmlItems(xml) {
   const matches = xml.match(/<(item|row|list|data|HIT)[^>]*>[\s\S]*?<\/\1>/gi) || [];
   return matches.map((block) => {
@@ -1183,18 +1190,18 @@ function normalizeGovernmentProjects(payload, source, keyword) {
     const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_pbanc_nm", "intg_pbanc_biz_nm", "biz_sj", "ProjectTitle_Korean", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
     if (!title || title.includes("{{") || title.includes("}}")) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "detl_pg_url", "biz_gdnc_url", "biz_aply_url", "상세URL", "상세페이지url"]);
-    const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "접수기간", "신청기간"]);
+    const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "content", "title", "접수기간", "신청기간"]);
     const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
-    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pbanc_rcpt_bgng_dt", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
-    const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
+    const announcementDate = normalizeGovernmentDate(firstField(row, ["announcementDate", "date", "startDate", "Start", "ProjectPeriod_Start", "ProjectPeriodStart", "pbancRcptBgngYmd", "pbanc_rcpt_bgng_dt", "pblancDe", "creatPnttm", "ProjectYear", "공고일", "등록일", "startYmd"])) || periodStartDate(period);
+    const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "linkid", "titleid", "boardid", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
     result.push({
       source: source.name,
       external_id: externalId,
       title: clean(title),
-      agency: clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "sprv_inst", "pbanc_ntrp_nm", "biz_prch_dprt_nm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
-      category: clean(firstField(row, ["category", "bizCategory", "supportType", "supt_biz_clsfc", "분야", "사업분류"])) || keyword,
+      agency: source.key === "khidi" ? "한국보건산업진흥원" : clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "sprv_inst", "pbanc_ntrp_nm", "biz_prch_dprt_nm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
+      category: clean(firstField(row, ["category", "bizCategory", "supportType", "supt_biz_clsfc", "분야", "사업분류"])) || (source.key === "khidi" ? "보건산업 공고" : keyword),
       summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "pbanc_ctnt", "bsnsSumryCn", "Goal_Full", "Abstract_Full", "Effect_Full", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
-      link: link ? String(link).trim() : "",
+      link: link ? String(link).trim() : khidiDetailUrl(row),
       announcement_date: announcementDate,
       deadline,
       status: clean(firstField(row, ["status", "recruitmentStatus", "접수상태", "공고상태"])) || statusFromDeadline(deadline),
@@ -1944,6 +1951,8 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
 
 
 
