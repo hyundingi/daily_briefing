@@ -265,6 +265,8 @@ async function refreshGovernmentProjects(request, env) {
   await reuseExistingGovernmentProjectIds(env.DB, collected);
   const fresh = await filterNewRows(env.DB, "government_projects", collected, governmentProjectKey);
   const statements = collected.map((item) => governmentProjectStatement(env, item, nowText));
+  statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(`grants:${now.toISOString()}`, nowText, kstTimestamp(new Date()), collected.length, 0, fresh.length, 0, JSON.stringify(diagnostics)));
   if (statements.length) await env.DB.batch(statements);
   return jsonResponse({ ok: true, added: fresh.length, total: collected.length, projects: await governmentProjectsFromD1(env), diagnostics });
 }
@@ -1120,7 +1122,7 @@ function irisHtmlItems(html) {
   const matches = String(html || "").match(/<div class="item-biz">[\s\S]*?<\/a>\s*<\/div>/gi) || [];
   for (const block of matches) {
     const title = textFromHtmlClass(block, "title");
-    if (!title) continue;
+    if (!title || title.includes("{{") || title.includes("}}")) continue;
     const viewMatch = block.match(/f_bsnsAncmBtinSituListForm_view\('([^']+)'\s*,\s*'([^']+)'\)/i);
     const period = textFromHtmlClass(block, "period");
     const departments = Array.from(block.matchAll(/<p class="department">([\s\S]*?)<\/p>/gi)).map((match) => clean(match[1])).filter(Boolean);
@@ -1176,7 +1178,7 @@ function normalizeGovernmentProjects(payload, source, keyword) {
   const result = [];
   for (const row of findGovernmentRows(payload)) {
     const title = firstField(row, ["title", "pblancNm", "pbancNm", "bizPbancNm", "biz_pbanc_nm", "intg_pbanc_biz_nm", "biz_sj", "ProjectTitle_Korean", "ProjectTitle", "Korean", "국문과제명", "사업명", "공고명", "과제명", "name", "subject"]);
-    if (!title) continue;
+    if (!title || title.includes("{{") || title.includes("}}")) continue;
     const link = firstField(row, ["link", "url", "detailUrl", "pblancUrl", "pbancUrl", "dtlUrl", "detl_pg_url", "biz_gdnc_url", "biz_aply_url", "상세URL", "상세페이지url"]);
     const period = firstField(row, ["reqstBeginEndDe", "applicationPeriod", "receptionPeriod", "ProjectPeriod", "접수기간", "신청기간"]);
     const deadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"])) || periodEndDate(period);
@@ -1939,4 +1941,6 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
 
