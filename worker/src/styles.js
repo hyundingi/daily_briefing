@@ -290,6 +290,7 @@ button { border: 0; cursor: pointer; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
 .empty { padding: 36px; text-align: center; color: var(--muted); border-radius: 22px; background: rgba(255,255,255,0.54); }
+.empty.compact { padding: 18px; font-size: 13px; }
 .hidden-admin { position: fixed; right: 18px; bottom: 56px; z-index: 20; display: none; gap: 8px; padding: 10px; border-radius: 18px; background: rgba(255,255,255,0.92); box-shadow: var(--shadow); }
 .hidden-admin.open { display: flex; }
 
@@ -316,6 +317,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;
+
 
 
 

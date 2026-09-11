@@ -10,6 +10,7 @@ crons = ["*/30 * * * *", "30 22 * * *"]
 
 [vars]
 GOV_PROJECT_KEYWORDS = "바이오,헬스,제약,의료,디지털헬스,R&D"
+GOOGLE_CALENDAR_ID = "your_calendar_id@example.com"
 BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do"
 NTIS_API_URL = "https://www.ntis.go.kr/rndopen/openApi/public_project?apprvKey={key}&collection=project&SRWR={keyword}&searchFd=BI&startPosition={page}&displayCnt={limit}"
 
@@ -28,5 +29,7 @@ database_id = "YOUR_D1_DATABASE_ID"
 # NAVER_API_HUB_CLIENT_SECRET
 # GEMINI_API_KEY
 # GEMINI_MODEL                 optional, default: gemini-3.6-flash
+# GOOGLE_CALENDAR_API_KEY      optional, required for Google Calendar timeline
 # UPDATE_PASSWORD              optional but recommended
+
 

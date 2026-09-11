@@ -10,6 +10,7 @@ const DART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json";
 const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 const BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do";
+const GOOGLE_CALENDAR_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events";
 const KSTARTUP_API_URL = "https://nidview.k-startup.go.kr/view/public/call/kisedKstartupService/announcementInformation";
 const KHIDI_LIST_URL = "https://www.khidi.or.kr/kps/openAPI/requestxml?rowCnt=100&menuId=MENU01108";
 const IRIS_MAIN_URL = "https://iris.go.kr/main.do";
@@ -90,6 +91,7 @@ export default {
       if (request.method === "GET" && url.pathname === "/assets/styles.css") return cssResponse(APP_CSS);
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
       if (request.method === "GET" && url.pathname === "/api/financials") return jsonResponse(await financialMetricsFromD1(env));
+      if (request.method === "GET" && url.pathname === "/api/calendar") return jsonResponse(await calendarEvents(env));
       if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env));
       if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
@@ -598,6 +600,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
   const governmentProjects = await governmentProjectsFromD1(env, cutoff);
   const financialMetrics = await financialMetricsFromD1(env);
+  const calendar = await calendarEvents(env, diagnostics);
   const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
   const news = (newsRows.results || []).map(newsFromDb);
   const itemSummaries = await itemSummariesFromD1(env);
@@ -609,6 +612,8 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
     news,
     government_projects: governmentProjects,
     financial_metrics: financialMetrics,
+    calendar_events: calendar.events,
+    calendar_status: calendar.status,
     analysis: {},
     item_summaries: itemSummaries,
     diagnostics,
@@ -617,6 +622,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
       news_count: news.length,
       government_project_count: governmentProjects.length,
       financial_metric_count: financialMetrics.length,
+      calendar_event_count: calendar.events.length,
       important_disclosure_count: disclosures.filter((item) => item.important).length,
       important_news_count: news.filter((item) => item.important).length,
     },
@@ -654,6 +660,55 @@ async function itemSummariesFromD1(env) {
   }
 }
 
+async function calendarEvents(env, diagnostics = []) {
+  const calendarId = clean(env.GOOGLE_CALENDAR_ID || "");
+  const apiKey = clean(env.GOOGLE_CALENDAR_API_KEY || "");
+  if (!calendarId || !apiKey) {
+    const status = { ok: false, configured: false, message: "Google Calendar ID/API KEY 설정 전입니다." };
+    diagnostics.push({ step: "google_calendar", status: "missing_config" });
+    return { events: [], status };
+  }
+
+  const now = new Date();
+  const start = kstDateKey(now) + "T00:00:00+09:00";
+  const end = kstDateKey(addDays(now, 1)) + "T00:00:00+09:00";
+  const url = new URL(GOOGLE_CALENDAR_EVENTS_URL.replace("{calendarId}", encodeURIComponent(calendarId)));
+  url.searchParams.set("key", apiKey);
+  url.searchParams.set("timeMin", start);
+  url.searchParams.set("timeMax", end);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("timeZone", "Asia/Seoul");
+  url.searchParams.set("maxResults", "20");
+
+  try {
+    const payload = await fetchJson(url.toString(), { headers: { Accept: "application/json" } });
+    const events = (payload.items || []).map(calendarEventFromGoogle).filter((item) => item.title);
+    diagnostics.push({ step: "google_calendar", status: "ok", count: events.length });
+    return { events, status: { ok: true, configured: true, count: events.length, updated_at: kstTimestamp(new Date()) } };
+  } catch (error) {
+    diagnostics.push({ step: "google_calendar", status: "exception", error: safeError(error) });
+    return { events: [], status: { ok: false, configured: true, message: "Google Calendar 일정을 불러오지 못했습니다." } };
+  }
+}
+
+function calendarEventFromGoogle(item) {
+  const start = item.start || {};
+  const end = item.end || {};
+  const startValue = start.dateTime || start.date || "";
+  const endValue = end.dateTime || end.date || "";
+  return {
+    id: clean(item.id),
+    title: clean(item.summary || "제목 없는 일정"),
+    description: clean(item.description || ""),
+    location: clean(item.location || ""),
+    start: startValue,
+    end: endValue,
+    all_day: !!start.date,
+    html_link: clean(item.htmlLink || ""),
+    status: clean(item.status || ""),
+  };
+}
 async function archiveIndexFromD1(env) {
   const rows = await env.DB.prepare(`SELECT r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, r.summary_json, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
     FROM newsletter_runs r LEFT JOIN newsletter_items i ON r.id = i.run_id
@@ -2001,6 +2056,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 

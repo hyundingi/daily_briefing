@@ -124,6 +124,8 @@ export const APP_JS = String.raw`
     var news = sortItems((data && data.news) || []);
     var grants = ((data && data.government_projects) || []).slice().sort(compareGrants);
     var financials = (data && data.financial_metrics) || [];
+    var calendarEvents = (data && data.calendar_events) || [];
+    var calendarStatus = (data && data.calendar_status) || {};
     var todayDisclosures = disclosures.filter(function (item) { return sameDay(item); });
     var todayNews = news.filter(function (item) { return sameDay(item); });
     var filteredDisclosures = filterItems(disclosures, company, query);
@@ -135,14 +137,14 @@ export const APP_JS = String.raw`
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
-        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
+        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
         !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
-        !loading && active === "schedule" ? h(SchedulePage, { grants: grants }) : null,
+        !loading && active === "schedule" ? h(SchedulePage, { grants: grants, calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
           h("button", { className: "ghost-button", onClick: summarizeMissing }, "AI 요약 채우기"),
           h("button", { className: "ghost-button", onClick: refreshGrants }, "국책과제 수집"),
@@ -185,11 +187,11 @@ export const APP_JS = String.raw`
         h(KpiCard, { label: "오늘 공시", value: props.todayDisclosures.length, unit: "건", foot: "DART 기준" }),
         h(KpiCard, { label: "오늘 뉴스", value: props.todayNews.length, unit: "건", foot: "네이버 뉴스 기준" }),
         h(KpiCard, { label: "모집중 국책과제", value: props.grants.filter(function (item) { return item.status !== "마감"; }).length, unit: "건", foot: "마감일 가까운 순" }),
-        h(KpiCard, { label: "실적 마감", value: "D-5", unit: "", foot: "캘린더 연동 예정" })
+        h(KpiCard, { label: "오늘 일정", value: props.calendarEvents.length, unit: "건", foot: props.calendarStatus && props.calendarStatus.configured ? "Google Calendar" : "캘린더 설정 전" })
       ),
       h("section", { className: "dashboard-grid" },
         h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
-        h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
   }
@@ -285,7 +287,7 @@ export const APP_JS = String.raw`
   }
 
   function SchedulePage(props) {
-    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true }), h(GrantPanel, { grants: props.grants, expanded: true }));
+    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, expanded: true }));
   }
 
   function IntelligencePanel(props) {
@@ -311,9 +313,26 @@ export const APP_JS = String.raw`
   }
 
   function SchedulePanel(props) {
-    return h("section", { className: props && props.featured ? "panel schedule-panel featured" : "panel schedule-panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "오늘의 팀 타임라인", subtitle: "가장 먼저 확인해야 하는 일정 영역입니다. Google Calendar 연동 예정입니다.", pill: "오늘 일정" }), h("div", { className: "timeline-item active" }, h("span", { className: "time-badge" }, "09:30"), h("div", null, h("p", { className: "mini-title" }, "월간 실적 점검"), h("p", { className: "mini-text" }, "진행 중 일정은 배너로 강조할 예정입니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "14:00"), h("div", null, h("p", { className: "mini-title" }, "예산 조정 회의"), h("p", { className: "mini-text" }, "캘린더 권한 연결 후 실제 일정으로 대체됩니다."))), h("div", { className: "timeline-item" }, h("span", { className: "time-badge" }, "17:00"), h("div", null, h("p", { className: "mini-title" }, "마감 자료 취합"), h("p", { className: "mini-text" }, "보고 일정과 D-Day를 연결할 예정입니다.")))));
+    var events = (props && props.events ? props.events : []).slice().sort(compareCalendarEvents);
+    var status = props && props.status ? props.status : {};
+    var subtitle = status.configured ? "Google Calendar에서 오늘 일정을 가져옵니다." : "Google Calendar ID와 API KEY를 설정하면 오늘 일정이 표시됩니다.";
+    return h("section", { className: props && props.featured ? "panel schedule-panel featured" : "panel schedule-panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "오늘의 팀 타임라인", subtitle: subtitle, pill: events.length ? events.length + "건" : "오늘 일정" }),
+      events.length ? events.map(function (event) { return h(CalendarEventItem, { key: event.id || event.title + event.start, event: event }); }) : h("div", { className: "empty compact" }, status.message || "오늘 등록된 일정이 없습니다.")
+    ));
   }
 
+  function CalendarEventItem(props) {
+    var event = props.event || {};
+    return h("div", { className: isCurrentCalendarEvent(event) ? "timeline-item active" : "timeline-item" },
+      h("span", { className: "time-badge" }, calendarTimeLabel(event)),
+      h("div", null,
+        h(event.html_link ? "a" : "p", { className: "mini-title", href: event.html_link || undefined, target: event.html_link ? "_blank" : undefined, rel: event.html_link ? "noreferrer" : undefined }, event.title || "제목 없는 일정"),
+        h("p", { className: "mini-text" }, [calendarRangeLabel(event), event.location].filter(Boolean).join(" · ")),
+        event.description ? h("p", { className: "mini-text" }, cleanSnippet(event.description)) : null
+      )
+    );
+  }
   function GrantPanel(props) {
     var searchState = React.useState("");
     var search = searchState[0];
@@ -413,6 +432,44 @@ export const APP_JS = String.raw`
     return h("div", { className: "ticker" }, h("div", { className: "ticker-track" }, items.concat(items).map(function (item, index) { var url = item.url || item.link || "#"; return h("a", { className: "ticker-item", key: index, href: url, target: "_blank", rel: "noreferrer" }, (item.company || "") + " · " + (item.title || "")); })));
   }
 
+  function compareCalendarEvents(a, b) {
+    return calendarTimeValue(a.start) - calendarTimeValue(b.start);
+  }
+
+  function calendarTimeValue(value) {
+    var date = new Date(value || "");
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+
+  function calendarTimeLabel(event) {
+    if (event && event.all_day) return "종일";
+    var start = calendarClock(event && event.start);
+    return start || "시간 미정";
+  }
+
+  function calendarRangeLabel(event) {
+    if (!event) return "";
+    if (event.all_day) return "종일 일정";
+    var start = calendarClock(event.start);
+    var end = calendarClock(event.end);
+    return [start, end].filter(Boolean).join(" - ");
+  }
+
+  function calendarClock(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  function isCurrentCalendarEvent(event) {
+    if (!event || event.all_day) return false;
+    var now = new Date();
+    var start = new Date(event.start || "");
+    var end = new Date(event.end || "");
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+    return start.getTime() <= now.getTime() && end.getTime() >= now.getTime();
+  }
   function filterItems(items, company, query) {
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
@@ -528,6 +585,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 

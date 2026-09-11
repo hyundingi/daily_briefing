@@ -15,6 +15,7 @@
 - 공시 / 뉴스 탭에서는 기업명 선택과 검색어로 필터링할 수 있습니다.
 - Cloudflare Worker cron이 30분마다 새 공시/뉴스를 수집해 D1에 누적 저장합니다.
 - 국책과제 공고는 기업마당, K-Startup, IRIS, KHIDI처럼 Worker에서 접근 가능한 API를 D1에 저장합니다.
+- Google Calendar는 GOOGLE_CALENDAR_ID와 GOOGLE_CALENDAR_API_KEY가 설정되면 오늘 일정을 실시간으로 불러와 팀 타임라인에 표시합니다. 일정은 D1에 누적 저장하지 않습니다.
 - NTIS처럼 접근 허용 IP가 필요한 API는 고정 공인 IP가 있는 회사 PC/서버/VPS에서 외부 수집기를 실행한 뒤 Worker로 업로드합니다.
 - DART 재무정보는 숨김 관리자 메뉴의 `DART 재무 수집`으로 단일회사 주요계정 API를 호출해 저장합니다.
 - 화면 상단에는 마지막 데이터 업데이트 시간이 표시됩니다.
@@ -363,3 +364,4 @@ cd worker
 pnpm install
 pnpm deploy
 ```
+
