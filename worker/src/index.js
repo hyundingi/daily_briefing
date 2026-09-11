@@ -966,10 +966,13 @@ async function collectGovernmentProjects(env, diagnostics) {
         const normalized = normalizeGovernmentProjects(parsed, source, keyword);
         rows.push(...normalized);
         const diagnostic = { step: `grant:${source.key}`, keyword, status: "ok", count: normalized.length };
-        if (!normalized.length && source.key === "ntis") {
-          diagnostic.body = sanitizeErrorMessage(clean(text).slice(0, 260));
+        if (!normalized.length) {
+          diagnostic.content_type = response.headers.get("content-type") || "";
+          diagnostic.body = sanitizeErrorMessage(clean(text).slice(0, 360));
           diagnostic.hit_tags = (text.match(/<HIT\b/gi) || []).length;
           diagnostic.item_tags = (text.match(/<(item|row|list|data)\b/gi) || []).length;
+          diagnostic.board_view_count = (text.match(/\/board\/view/gi) || []).length;
+          diagnostic.item_biz_count = (text.match(/item-biz/gi) || []).length;
         }
         if (source.keywordless) diagnostic.keyword = "전체";
         diagnostics.push(diagnostic);
@@ -1941,6 +1944,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 
