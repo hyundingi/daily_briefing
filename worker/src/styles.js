@@ -229,8 +229,8 @@ button { border: 0; cursor: pointer; }
 .mini-title { margin: 0; font-size: 14px; font-weight: 900; }
 .mini-text { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.grant-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 14px; }
-.result-count { color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
+.grant-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.grant-filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }`r`n.grant-filter-group .field { width: 150px; }`r`n.grant-search-group { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }`r`n.grant-search { width: 240px; }`r`n.check-field { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.72); color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }`r`n.check-field input { accent-color: var(--primary-800); }`r`n.result-count { color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
 .grant-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .grant-grid.expanded { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .grant-card { padding: 14px; border-radius: 20px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); }
@@ -297,8 +297,9 @@ button { border: 0; cursor: pointer; }
   .topbar-actions { justify-content: flex-start; margin-top: 12px; }
   .updated-chip { display: inline-flex; margin-top: 12px; }
   .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .cash-grid { grid-template-columns: 1fr; }
-  .grant-toolbar { grid-template-columns: 1fr; }
+  .grant-toolbar { align-items: stretch; }`r`n  .grant-filter-group, .grant-search-group { width: 100%; justify-content: flex-start; margin-left: 0; }`r`n  .grant-filter-group .field, .grant-search { width: 100%; }
   .profit-row { grid-template-columns: 1fr 1fr; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;
+

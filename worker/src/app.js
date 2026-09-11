@@ -318,17 +318,37 @@ export const APP_JS = String.raw`
     var searchState = React.useState("");
     var search = searchState[0];
     var setSearch = searchState[1];
+    var sourceState = React.useState("전체");
+    var source = sourceState[0];
+    var setSource = sourceState[1];
+    var topicState = React.useState("전체");
+    var topic = topicState[0];
+    var setTopic = topicState[1];
+    var closedState = React.useState(false);
+    var includeClosed = closedState[0];
+    var setIncludeClosed = closedState[1];
     var allGrants = props && props.grants ? props.grants : [];
-    var filtered = filterGrants(allGrants, search);
+    var sources = ["전체"].concat(uniqueGrantValues(allGrants, "source"));
+    var topics = ["전체"].concat(uniqueGrantValues(allGrants, "category"));
+    var filtered = filterGrants(allGrants, { query: search, source: source, topic: topic, includeClosed: includeClosed });
     var grants = props && props.expanded ? filtered : filtered.slice(0, 3);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·NTIS·K-Startup·IRIS/KHIDI 공고를 마감일 가까운 순으로 봅니다.", pill: props && props.expanded && allGrants.length ? allGrants.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
-      props && props.expanded ? h("div", { className: "grant-toolbar" }, h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "공고명, 기관, 키워드 검색" }), h("span", { className: "result-count" }, "표시 " + grants.length + "건")) : null,
-      h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item, compact: !(props && props.expanded) }); }) : h("div", { className: "empty" }, "아직 수집된 국책과제 공고가 없습니다. API URL과 키를 설정하면 이 영역에 표시됩니다.")),
+      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·K-Startup·IRIS 공고를 마감일 가까운 순으로 봅니다. NTIS와 KHIDI는 연결 보류 상태입니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
+      props && props.expanded ? h("div", { className: "grant-toolbar" },
+        h("div", { className: "grant-filter-group" },
+          h("select", { className: "field", value: source, onChange: function (event) { setSource(event.target.value); } }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
+          h("select", { className: "field", value: topic, onChange: function (event) { setTopic(event.target.value); } }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 키워드" : name); })),
+          h("label", { className: "check-field" }, h("input", { type: "checkbox", checked: includeClosed, onChange: function (event) { setIncludeClosed(event.target.checked); } }), h("span", null, "마감 공고 포함"))
+        ),
+        h("div", { className: "grant-search-group" },
+          h("input", { className: "field grant-search", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "공고명, 기관 검색" }),
+          h("span", { className: "result-count" }, "표시 " + filtered.length + "건")
+        )
+      ) : null,
+      h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item, compact: !(props && props.expanded) }); }) : h("div", { className: "empty" }, includeClosed ? "조건에 맞는 국책과제 공고가 없습니다." : "진행 중인 국책과제 공고가 없습니다. 마감 공고 포함을 체크하면 지난 공고도 볼 수 있습니다.")),
       null
     ));
   }
-
   function GrantCard(props) {
     var item = props.item;
     return h("article", { className: props.compact ? "grant-card compact" : "grant-card" },
@@ -383,14 +403,36 @@ export const APP_JS = String.raw`
     });
   }
 
-  function filterGrants(items, query) {
+  function filterGrants(items, options) {
+    var query = typeof options === "string" ? options : (options && options.query) || "";
+    var source = options && options.source ? options.source : "전체";
+    var topic = options && options.topic ? options.topic : "전체";
+    var includeClosed = !!(options && options.includeClosed);
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
+      var sourceOk = source === "전체" || (item.source || "") === source;
+      var topicOk = topic === "전체" || (item.category || item.keywords || "") === topic;
+      var openOk = includeClosed || isOpenGrant(item);
       var text = [item.source, item.title, item.agency, item.category, item.summary, item.budget, item.target, item.keywords, item.deadline].join(" ").toLowerCase();
-      return !needle || text.indexOf(needle) >= 0;
+      return sourceOk && topicOk && openOk && (!needle || text.indexOf(needle) >= 0);
     }).sort(compareGrants);
   }
 
+  function uniqueGrantValues(items, field) {
+    var seen = {};
+    return items.map(function (item) { return item && item[field] ? String(item[field]).trim() : ""; }).filter(function (value) {
+      if (!value || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    }).sort(function (a, b) { return a.localeCompare(b, "ko"); });
+  }
+
+  function isOpenGrant(item) {
+    var status = String((item && item.status) || "");
+    if (status.indexOf("마감") >= 0 || status.toLowerCase().indexOf("closed") >= 0) return false;
+    var label = ddayText(item && item.deadline);
+    return label !== "마감";
+  }
   function sortItems(items) {
     return items.slice().sort(function (a, b) { return dateValue(b) - dateValue(a); });
   }
@@ -456,3 +498,4 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
