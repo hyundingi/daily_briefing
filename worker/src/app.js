@@ -327,25 +327,44 @@ export const APP_JS = String.raw`
     var closedState = React.useState(false);
     var includeClosed = closedState[0];
     var setIncludeClosed = closedState[1];
+    var pageState = React.useState(1);
+    var page = pageState[0];
+    var setPage = pageState[1];
     var allGrants = props && props.grants ? props.grants : [];
     var sources = ["전체"].concat(uniqueGrantValues(allGrants, "source"));
     var topics = ["전체"].concat(uniqueGrantValues(allGrants, "category"));
     var filtered = filterGrants(allGrants, { query: search, source: source, topic: topic, includeClosed: includeClosed });
-    var grants = props && props.expanded ? filtered : filtered.slice(0, 3);
+    var pageSize = 16;
+    var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    var safePage = Math.min(page, totalPages);
+    if (safePage !== page) setTimeout(function () { setPage(safePage); }, 0);
+    var pagedGrants = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+    var grants = props && props.expanded ? pagedGrants : filtered.slice(0, 3);
+    function resetPage(fn) {
+      return function (event) {
+        fn(event);
+        setPage(1);
+      };
+    }
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·K-Startup·IRIS·KHIDI 공고를 마감일 가까운 순으로 봅니다. NTIS는 승인/IP 등록 대기 상태입니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
       props && props.expanded ? h("div", { className: "grant-toolbar" },
         h("div", { className: "grant-filter-group" },
-          h("select", { className: "field", value: source, onChange: function (event) { setSource(event.target.value); } }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
-          h("select", { className: "field", value: topic, onChange: function (event) { setTopic(event.target.value); } }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 키워드" : name); })),
-          h("label", { className: "check-field" }, h("input", { type: "checkbox", checked: includeClosed, onChange: function (event) { setIncludeClosed(event.target.checked); } }), h("span", null, "마감 공고 포함"))
+          h("select", { className: "field", value: source, onChange: resetPage(function (event) { setSource(event.target.value); }) }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
+          h("select", { className: "field", value: topic, onChange: resetPage(function (event) { setTopic(event.target.value); }) }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 키워드" : name); })),
+          h("label", { className: "check-field" }, h("input", { type: "checkbox", checked: includeClosed, onChange: resetPage(function (event) { setIncludeClosed(event.target.checked); }) }), h("span", null, "마감 공고 포함"))
         ),
         h("div", { className: "grant-search-group" },
-          h("input", { className: "field grant-search", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "공고명, 기관 검색" }),
+          h("input", { className: "field grant-search", value: search, onChange: resetPage(function (event) { setSearch(event.target.value); }), placeholder: "공고명, 기관 검색" }),
           h("span", { className: "result-count" }, "표시 " + filtered.length + "건")
         )
       ) : null,
       h("div", { className: props && props.expanded ? "grant-grid expanded" : "grant-grid" }, grants.length ? grants.map(function (item) { return h(GrantCard, { key: item.id || item.source + item.title, item: item, compact: !(props && props.expanded) }); }) : h("div", { className: "empty" }, includeClosed ? "조건에 맞는 국책과제 공고가 없습니다." : "진행 중인 국책과제 공고가 없습니다. 마감 공고 포함을 체크하면 지난 공고도 볼 수 있습니다.")),
+      props && props.expanded && totalPages > 1 ? h("div", { className: "pagination" },
+        h("button", { className: "page-button", disabled: safePage <= 1, onClick: function () { setPage(Math.max(1, safePage - 1)); } }, "이전"),
+        paginationNumbers(safePage, totalPages).map(function (pageNo, index) { return pageNo === "..." ? h("span", { className: "page-ellipsis", key: "ellipsis-" + index }, "...") : h("button", { className: pageNo === safePage ? "page-button active" : "page-button", key: pageNo, onClick: function () { setPage(pageNo); } }, pageNo); }),
+        h("button", { className: "page-button", disabled: safePage >= totalPages, onClick: function () { setPage(Math.min(totalPages, safePage + 1)); } }, "다음")
+      ) : null,
       null
     ));
   }
@@ -418,6 +437,17 @@ export const APP_JS = String.raw`
     }).sort(compareGrants);
   }
 
+  function paginationNumbers(current, total) {
+    if (total <= 7) return Array.from({ length: total }, function (_, index) { return index + 1; });
+    var numbers = [1];
+    var start = Math.max(2, current - 1);
+    var end = Math.min(total - 1, current + 1);
+    if (start > 2) numbers.push("...");
+    for (var i = start; i <= end; i += 1) numbers.push(i);
+    if (end < total - 1) numbers.push("...");
+    numbers.push(total);
+    return numbers;
+  }
   function uniqueGrantValues(items, field) {
     var seen = {};
     return items.map(function (item) { return item && item[field] ? String(item[field]).trim() : ""; }).filter(function (value) {
@@ -498,5 +528,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 

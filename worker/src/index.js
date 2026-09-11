@@ -128,7 +128,7 @@ async function scheduledRefresh(env, event) {
       console.log("scheduled_refresh_skipped", JSON.stringify({ reason: "missing_db", cron: event && event.cron }));
       return;
     }
-    const response = await refreshWithD1(env);
+    const response = event && event.cron === "30 22 * * *" ? await refreshGovernmentProjectsScheduled(env) : await refreshWithD1(env, { includeGovernmentProjects: false });
     const result = await response.json().catch(() => ({}));
     console.log("scheduled_refresh_done", JSON.stringify({ cron: event && event.cron, added: result.added || {}, updated_at: result.briefing && result.briefing.updated_at }));
   } catch (error) {
@@ -210,13 +210,14 @@ async function archiveBriefing(env, date) {
   return await readJson(env, `briefing:${date}`, emptyBriefing());
 }
 
-async function refreshWithD1(env) {
+async function refreshWithD1(env, options = {}) {
   const startedAt = new Date();
   const diagnostics = [];
   const collectedDisclosures = await collectDisclosures(env, diagnostics);
   const collectedNews = await collectNews(env, diagnostics);
-  const collectedGovernmentProjects = await collectGovernmentProjects(env, diagnostics);
-  await reuseExistingGovernmentProjectIds(env.DB, collectedGovernmentProjects);
+  const includeGovernmentProjects = options.includeGovernmentProjects !== false;
+  const collectedGovernmentProjects = includeGovernmentProjects ? await collectGovernmentProjects(env, diagnostics) : [];
+  if (includeGovernmentProjects) await reuseExistingGovernmentProjectIds(env.DB, collectedGovernmentProjects);
   ensureUsableRefresh(collectedDisclosures, collectedNews, diagnostics);
 
   const now = new Date();
@@ -271,6 +272,21 @@ async function refreshGovernmentProjects(request, env) {
   return jsonResponse({ ok: true, added: fresh.length, total: collected.length, projects: await governmentProjectsFromD1(env), diagnostics });
 }
 
+
+async function refreshGovernmentProjectsScheduled(env) {
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const diagnostics = [];
+  const now = new Date();
+  const nowText = kstTimestamp(now);
+  const collected = await collectGovernmentProjects(env, diagnostics);
+  await reuseExistingGovernmentProjectIds(env.DB, collected);
+  const fresh = await filterNewRows(env.DB, "government_projects", collected, governmentProjectKey);
+  const statements = collected.map((item) => governmentProjectStatement(env, item, nowText));
+  statements.push(env.DB.prepare("INSERT INTO refresh_runs (id, started_at, finished_at, disclosure_count, news_count, new_disclosure_count, new_news_count, diagnostics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(`grants:scheduled:${now.toISOString()}`, nowText, kstTimestamp(new Date()), collected.length, 0, fresh.length, 0, JSON.stringify(diagnostics)));
+  if (statements.length) await env.DB.batch(statements);
+  return jsonResponse({ ok: true, added: { government_projects: fresh.length }, briefing: { updated_at: nowText }, diagnostics });
+}
 async function importGovernmentProjects(request, env) {
   await requireUpdatePassword(request, env);
   if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
@@ -1985,6 +2001,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 

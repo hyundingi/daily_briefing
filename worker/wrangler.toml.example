@@ -6,7 +6,7 @@ compatibility_date = "2026-09-03"
 region = "gcp:asia-northeast3"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/30 * * * *", "30 22 * * *"]
 
 [vars]
 GOV_PROJECT_KEYWORDS = "바이오,헬스,제약,의료,디지털헬스,R&D"
@@ -29,3 +29,4 @@ database_id = "YOUR_D1_DATABASE_ID"
 # GEMINI_API_KEY
 # GEMINI_MODEL                 optional, default: gemini-3.6-flash
 # UPDATE_PASSWORD              optional but recommended
+
