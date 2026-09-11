@@ -14,7 +14,8 @@
 - 좌측 navbar에서 대시보드, 재무비교, 손익, 자금현황, 일정, 공시, 뉴스 영역을 전환합니다.
 - 공시 / 뉴스 탭에서는 기업명 선택과 검색어로 필터링할 수 있습니다.
 - Cloudflare Worker cron이 30분마다 새 공시/뉴스를 수집해 D1에 누적 저장합니다.
-- 국책과제 공고는 기업마당, NTIS, K-Startup, IRIS, KHIDI API 설정값이 있으면 함께 수집해 D1에 저장합니다.
+- 국책과제 공고는 기업마당, K-Startup, IRIS, KHIDI처럼 Worker에서 접근 가능한 API를 D1에 저장합니다.
+- NTIS처럼 접근 허용 IP가 필요한 API는 고정 공인 IP가 있는 회사 PC/서버/VPS에서 외부 수집기를 실행한 뒤 Worker로 업로드합니다.
 - DART 재무정보는 숨김 관리자 메뉴의 `DART 재무 수집`으로 단일회사 주요계정 API를 호출해 저장합니다.
 - 화면 상단에는 마지막 데이터 업데이트 시간이 표시됩니다.
 - 새로 추가된 공시/뉴스가 있을 때만 Gemini 요약을 생성합니다.
@@ -97,6 +98,7 @@ Python 기반 뉴스레터 생성 파이프라인입니다.
 - `newsletter_renderer.py`: 메일용 HTML 뉴스레터 생성
 - `email_sender.py`: SMTP 메일 발송
 - `worker_newsletter_sender.py`: Worker가 생성한 미발송 뉴스레터 HTML을 가져와 메일 발송
+- `ntis_collector.py`: NTIS API를 고정 IP 환경에서 직접 호출한 뒤 Worker `/api/grants/import`로 업로드
 - `company_profiles.py`: 회사 프로필 로딩
 
 ### `worker/`
@@ -127,6 +129,7 @@ Cloudflare Worker의 핵심 코드입니다.
 - `/api/financials/refresh`: DART 단일회사 주요계정 수동 수집
 - `/api/grants`: 최근 30일 국책과제/지원사업 공고 조회
 - `/api/grants/refresh`: 국책과제/지원사업 공고 수동 수집
+- `/api/grants/import`: 외부 수집기가 가져온 NTIS 등 국책과제 데이터를 D1에 업로드
 - `/api/archive`: 발송된 뉴스레터 아카이브 목록 조회
 - `/api/archive/YYYY-MM-DD`: 해당 날짜 뉴스레터 전문 조회
 - `/api/refresh`: 새 공시/뉴스 수집 및 D1 저장
@@ -197,7 +200,9 @@ D1 DB 테이블 생성 파일입니다.
 - 공고일, 마감일, 모집 상태
 - 지원규모, 지원대상, 검색 키워드
 
-기업마당은 공식 지원사업정보 API URL을 코드에 고정해두었으므로 `BIZINFO_API_KEY`만 있으면 수집할 수 있습니다. NTIS, K-Startup, IRIS, KHIDI는 신청한 API 서비스별 요청 URL이 달라질 수 있어 URL 설정값을 사용합니다. URL 설정값은 공식 기관 도메인 allowlist에 있는 주소만 호출합니다.
+기업마당은 공식 지원사업정보 API URL을 코드에 고정해두었으므로 `BIZINFO_API_KEY`만 있으면 Worker에서 수집할 수 있습니다. K-Startup, IRIS, KHIDI는 신청한 API 서비스별 요청 URL이 달라질 수 있어 URL 설정값을 사용합니다. URL 설정값은 공식 기관 도메인 allowlist에 있는 주소만 호출합니다.
+
+NTIS는 API 응답에서 `접근 허용 IP가 아닙니다`가 반환될 수 있으므로, Cloudflare Worker 직접 수집보다는 고정 공인 IP가 있는 실행 환경에서 `src/ntis_collector.py`를 실행하는 방식을 권장합니다.
 
 ### `worker/migrations/0005_financial_metrics.sql`
 
@@ -258,12 +263,46 @@ Cloudflare Worker에 아래 secrets가 필요합니다.
 
 - `GOV_PROJECT_KEYWORDS`: 국책과제 검색 키워드입니다. 기본값은 `바이오,헬스,제약,의료,디지털헬스,임상,R&D,연구개발`입니다.
 - `BIZINFO_API_KEY`: 기업마당 API 인증키입니다. URL은 코드에 고정되어 있습니다.
-- `NTIS_API_URL`, `NTIS_API_KEY`: NTIS API URL/키입니다. NTIS는 신청한 서비스 종류에 따라 요청 URL이 달라질 수 있습니다.
+- `NTIS_API_URL`, `NTIS_API_KEY`: NTIS 외부 수집기에서 사용하는 API URL/키입니다. Worker에 넣어도 IP 제한 때문에 실패할 수 있습니다.
+- `NTIS_MAX_PAGES`: NTIS 키워드별 최대 조회 페이지 수입니다. 기본값은 `3`입니다.
+- `NTIS_PAGE_LIMIT`: NTIS 1회 요청당 조회 건수입니다. 기본값은 `100`입니다.
 - `KSTARTUP_API_URL`, `KSTARTUP_API_KEY`: K-Startup API URL/키입니다.
 - `IRIS_API_URL`, `IRIS_API_KEY`: IRIS API URL/키입니다.
 - `KHIDI_API_URL`, `KHIDI_API_KEY`: KHIDI API URL/키입니다.
 
 NTIS, K-Startup, IRIS, KHIDI API URL에는 `{keyword}`를 검색어 위치에 넣고, 인증키가 필요한 API는 `{key}` 또는 `{serviceKey}`를 키 위치에 넣습니다. 실제 값은 발급받은 공식 API 문서의 요청 URL을 기준으로 작성합니다.
+
+## NTIS 고정 IP 수집기 실행
+
+NTIS는 신청 시 등록한 서버 IP에서만 API 호출을 허용할 수 있습니다. Cloudflare Worker는 고정 발신 IP를 안정적으로 등록하기 어렵기 때문에, NTIS는 별도 수집기를 고정 공인 IP 환경에서 실행합니다.
+
+필요 환경변수:
+
+```text
+NTIS_API_KEY=발급받은_NTIS_승인키
+NTIS_API_URL=https://www.ntis.go.kr/rndopen/openApi/public_project?apprvKey={key}&collection=project&SRWR={keyword}&searchFd=BI&startPosition={page}&displayCnt={limit}
+GOV_PROJECT_KEYWORDS=바이오,헬스,제약,의료,디지털헬스,R&D
+WORKER_BASE_URL=https://competitor-newsletter.hyundingi.workers.dev
+WORKER_UPDATE_PASSWORD=Worker_UPDATE_PASSWORD와_같은_값
+CF_ACCESS_CLIENT_ID=Cloudflare_Access_Service_Token_ID_선택
+CF_ACCESS_CLIENT_SECRET=Cloudflare_Access_Service_Token_SECRET_선택
+NTIS_MAX_PAGES=3
+NTIS_PAGE_LIMIT=100
+```
+
+실행:
+
+```powershell
+python -m src.ntis_collector
+```
+
+동작 흐름:
+
+```text
+고정 IP 환경의 수집기 → NTIS API 호출 → Worker /api/grants/import → D1 government_projects 저장 → 웹페이지 표시
+```
+
+회사 PC에서 테스트할 경우 NTIS에 회사 공인 IP가 등록되어 있어야 합니다. Cloudflare Access로 Worker를 보호한 상태라면 `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`도 함께 설정합니다.
 
 선택값:
 

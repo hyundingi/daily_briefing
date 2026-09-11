@@ -96,6 +96,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
       if (request.method === "POST" && url.pathname === "/api/financials/refresh") return await refreshFinancialMetrics(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/refresh") return await refreshGovernmentProjects(request, env);
+      if (request.method === "POST" && url.pathname === "/api/grants/import") return await importGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/summarize-missing") return await summarizeMissing(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/import-archive") return await importNewsletterArchive(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/generate") return await generateNewsletter(request, env);
@@ -263,6 +264,42 @@ async function refreshGovernmentProjects(request, env) {
   const statements = collected.map((item) => governmentProjectStatement(env, item, nowText));
   if (statements.length) await env.DB.batch(statements);
   return jsonResponse({ ok: true, added: fresh.length, total: collected.length, projects: await governmentProjectsFromD1(env), diagnostics });
+}
+
+async function importGovernmentProjects(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
+  const body = await request.json().catch(() => ({}));
+  const source = clean(body.source || "외부수집");
+  const importedAt = clean(body.imported_at) || kstTimestamp(new Date());
+  const rawProjects = Array.isArray(body.projects) ? body.projects : [];
+  const projects = rawProjects.map((item) => normalizeImportedGovernmentProject(item, source)).filter((item) => item.title);
+  await reuseExistingGovernmentProjectIds(env.DB, projects);
+  const fresh = await filterNewRows(env.DB, "government_projects", projects, governmentProjectKey);
+  const statements = projects.map((item) => governmentProjectStatement(env, item, importedAt));
+  if (statements.length) await env.DB.batch(statements);
+  return jsonResponse({ ok: true, source, received: rawProjects.length, saved: projects.length, added: fresh.length, projects: await governmentProjectsFromD1(env) });
+}
+
+function normalizeImportedGovernmentProject(item, fallbackSource) {
+  const row = item && typeof item === "object" ? item : {};
+  const title = clean(row.title || row.name || row.project_title || firstField(row, ["ProjectTitle_Korean", "ProjectTitle", "Korean"]));
+  return {
+    source: clean(row.source) || fallbackSource,
+    external_id: clean(row.external_id || row.project_number || row.project_id || row.id),
+    title,
+    agency: clean(row.agency || row.ministry || row.order_agency || row.research_agency),
+    category: clean(row.category || row.field || row.keywords) || fallbackSource,
+    summary: clean(row.summary || row.goal || row.abstract || row.description),
+    link: clean(row.link || row.url),
+    announcement_date: normalizeGovernmentDate(row.announcement_date || row.start_date || row.project_year),
+    deadline: normalizeGovernmentDate(row.deadline || row.end_date),
+    status: clean(row.status) || statusFromDeadline(row.deadline || row.end_date),
+    budget: clean(row.budget || row.total_funds || row.government_funds),
+    target: clean(row.target || row.organization || row.manager),
+    keywords: clean(row.keywords || row.keyword),
+    raw_json: JSON.stringify(row).slice(0, 5000),
+  };
 }
 
 async function refreshFinancialMetrics(request, env) {
