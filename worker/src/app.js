@@ -413,28 +413,66 @@ export const APP_JS = String.raw`
 
   function RdTrendPanel(props) {
     var ntisItems = (props && props.grants ? props.grants : []).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
-    var topics = topGrantKeywords(ntisItems);
-    var agencies = topGrantValues(ntisItems, "agency");
-    var recent = ntisItems.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 12 : 3);
+    var stats = rdTrendStats(ntisItems);
+    var recent = ntisItems.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 8 : 3);
     return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제 정보를 기반으로 정부 R&D 투자 방향과 수행기관 흐름을 분리해서 봅니다.", pill: ntisItems.length ? ntisItems.length + "건" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "자세히 보기")] : null }),
+      h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제 정보를 집계해 정부 R&D 투자 방향, 연구 분야, 수행기관 흐름을 봅니다.", pill: ntisItems.length ? ntisItems.length + "건 분석" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "분석 보기")] : null }),
       ntisItems.length ? h(React.Fragment, null,
         h("div", { className: "trend-grid" },
-          h(TrendBox, { label: "주요 키워드", value: topics.length ? topics.slice(0, 4).join(" · ") : "분석 대기", note: "과제명·요약 기준" }),
-          h(TrendBox, { label: "주요 수행/관리기관", value: agencies.length ? agencies.slice(0, 3).join(" · ") : "분석 대기", note: "기관명 빈도 기준" }),
-          h(TrendBox, { label: "전략 해석", value: "공고 이후 실제 선정·수행 과제 흐름을 보며 관심 분야의 지속성을 판단", note: "경영기획 검토용" })
+          h(TrendBox, { label: "분석 과제", value: formatNumber(ntisItems.length) + "건", note: "NTIS 수집 데이터 기준" }),
+          h(TrendBox, { label: "상위 키워드", value: stats.keywords.length ? stats.keywords.slice(0, 3).map(function (row) { return row.name; }).join(" · ") : "분석 대기", note: "과제명·요약 빈도 기준" }),
+          h(TrendBox, { label: "주요 기관", value: stats.agencies.length ? stats.agencies.slice(0, 2).map(function (row) { return row.name; }).join(" · ") : "분석 대기", note: "관리/수행기관 빈도 기준" })
+        ),
+        h("div", { className: "rd-analysis-grid" },
+          h(BarChart, { title: "연도별 과제 흐름", rows: stats.years, unit: "건" }),
+          h(BarChart, { title: "키워드별 비중", rows: stats.keywords.slice(0, 8), unit: "건" }),
+          h(RankList, { title: "수행·관리기관 TOP 10", rows: stats.agencies.slice(0, 10), unit: "건" }),
+          h(RankList, { title: "정부 R&D 투자 규모 상위", rows: stats.funds.slice(0, 8), unit: "원", money: true })
+        ),
+        h("div", { className: "strategy-box" },
+          h("p", { className: "strategy-title" }, "전략적으로 볼 점"),
+          h("ul", null,
+            h("li", null, stats.keywords.length ? "반복 키워드는 " + stats.keywords.slice(0, 4).map(function (row) { return row.name; }).join(", ") + " 중심입니다. 해당 분야의 공고가 이어지는지 국책과제 탭에서 같이 확인하면 좋습니다." : "키워드 분석을 위해 NTIS 데이터 적재가 필요합니다."),
+            h("li", null, stats.agencies.length ? stats.agencies[0].name + " 관련 과제가 많이 보여 해당 기관 공고·사업자료를 우선 모니터링할 가치가 있습니다." : "기관별 흐름은 데이터 적재 후 표시됩니다."),
+            h("li", null, "이 화면은 신청 가능한 공고가 아니라 실제 수행/등록된 과제를 보는 곳이므로, 정부가 이미 예산을 배정한 방향성을 파악하는 용도로 쓰는 것이 적합합니다.")
+          )
         ),
         h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, recent.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
           h("p", { className: "trend-title" }, item.title || "제목 없음"),
-          h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date].filter(Boolean).join(" · ")),
+          h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date, item.budget ? formatMoney(parseMoney(item.budget)) : ""].filter(Boolean).join(" · ")),
           item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
         ); }))
-      ) : h("div", { className: "empty compact" }, "NTIS 과제 데이터는 공고와 분리해 이곳에 표시할 예정입니다. 로컬 수집기로 업로드하면 정부 R&D 방향성 분석 화면으로 쌓입니다.")
+      ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. 로컬 수집기를 실행하면 연도별 흐름, 키워드 분포, 기관 랭킹, 연구비 상위 과제가 이곳에 표시됩니다.")
     ));
   }
 
   function TrendBox(props) {
     return h("article", { className: "trend-box" }, h("span", null, props.label), h("strong", null, props.value), h("p", null, props.note));
+  }
+
+  function BarChart(props) {
+    var rows = props.rows || [];
+    var max = rows.reduce(function (value, row) { return Math.max(value, row.value || 0); }, 0) || 1;
+    return h("article", { className: "analysis-card" },
+      h("h3", null, props.title),
+      rows.length ? h("div", { className: "bar-list" }, rows.map(function (row) { return h("div", { className: "bar-row", key: row.name },
+        h("span", { className: "bar-label" }, row.name),
+        h("span", { className: "bar-track" }, h("span", { className: "bar-fill", style: { width: Math.max(5, Math.round((row.value || 0) / max * 100)) + "%" } })),
+        h("span", { className: "bar-value" }, formatNumber(row.value || 0) + (props.unit ? props.unit : ""))
+      ); })) : h("p", { className: "mini-text" }, "분석할 데이터가 없습니다.")
+    );
+  }
+
+  function RankList(props) {
+    var rows = props.rows || [];
+    return h("article", { className: "analysis-card" },
+      h("h3", null, props.title),
+      rows.length ? h("ol", { className: "rank-list" }, rows.map(function (row, index) { return h("li", { key: row.name },
+        h("span", { className: "rank-no" }, index + 1),
+        h("span", { className: "rank-name" }, row.name),
+        h("strong", null, props.money ? formatMoney(row.value || 0) : formatNumber(row.value || 0) + (props.unit || ""))
+      ); })) : h("p", { className: "mini-text" }, "분석할 데이터가 없습니다.")
+    );
   }
 
   function ComingSoon(props) {
@@ -518,13 +556,49 @@ export const APP_JS = String.raw`
     });
   }
 
+  function rdTrendStats(items) {
+    return {
+      years: countRows(items, function (item) { return rdYear(item); }).sort(function (a, b) { return a.name.localeCompare(b.name); }),
+      keywords: rdKeywordRows(items),
+      agencies: countRows(items, function (item) { return item.agency || "기관 미확인"; }),
+      funds: items.map(function (item) { return { name: item.title || "제목 없음", value: parseMoney(item.budget), item: item }; }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value; })
+    };
+  }
+
+  function rdYear(item) {
+    var raw = String(item.announcement_date || item.deadline || item.first_seen_at || "");
+    var match = raw.match(/20\d{2}/);
+    return match ? match[0] : "연도 미상";
+  }
+
+  function rdKeywordRows(items) {
+    var strategic = ["AI", "디지털헬스", "신약", "임상", "바이오", "의료", "제약", "데이터", "플랫폼", "치료제", "진단", "의료기기", "백신", "세포", "유전자", "마이크로바이옴"];
+    var rows = strategic.map(function (keyword) {
+      var needle = String(keyword || "").toLowerCase();
+      var count = items.filter(function (item) { return [item.title, item.summary, item.category, item.keywords].join(" ").toLowerCase().indexOf(needle) >= 0; }).length;
+      return { name: keyword, value: count };
+    }).filter(function (row) { return row.value > 0; });
+    if (rows.length) return rows.sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name); });
+    return topGrantKeywords(items).map(function (name) { return { name: name, value: items.filter(function (item) { return [item.title, item.summary, item.category, item.keywords].join(" ").indexOf(name) >= 0; }).length }; });
+  }
+
+  function countRows(items, pick) {
+    var counts = {};
+    items.forEach(function (item) {
+      var name = String(pick(item) || "").trim();
+      if (!name) return;
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.keys(counts).map(function (name) { return { name: name, value: counts[name] }; }).sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name, "ko"); });
+  }
+
   function topGrantKeywords(items) {
     var words = {};
     items.forEach(function (item) {
       [item.title, item.summary, item.keywords, item.category].join(" ").split(/[\s,·/()\[\]{}<>]+/).forEach(function (word) {
         var value = String(word || "").trim();
         if (value.length < 2) return;
-        if (/^(사업|과제|지원|개발|연구|기반|기술|및|위한|통한|활용)$/.test(value)) return;
+        if (/^(사업|과제|지원|개발|연구|기반|기술|및|위한|통한|활용|정보|시스템|서비스)$/.test(value)) return;
         words[value] = (words[value] || 0) + 1;
       });
     });
@@ -532,13 +606,30 @@ export const APP_JS = String.raw`
   }
 
   function topGrantValues(items, field) {
-    var counts = {};
-    items.forEach(function (item) {
-      var value = String(item[field] || "").trim();
-      if (!value) return;
-      counts[value] = (counts[value] || 0) + 1;
-    });
-    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); }).slice(0, 6);
+    return countRows(items, function (item) { return item[field]; }).map(function (row) { return row.name; }).slice(0, 6);
+  }
+
+  function parseMoney(value) {
+    var text = String(value || "").replace(/,/g, "");
+    var match = text.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return 0;
+    var amount = Number(match[0]);
+    if (!Number.isFinite(amount)) return 0;
+    if (/억/.test(text)) amount *= 100000000;
+    else if (/만/.test(text)) amount *= 10000;
+    return amount;
+  }
+
+  function formatMoney(value) {
+    var amount = Number(value || 0);
+    if (!amount) return "-";
+    if (amount >= 100000000) return Math.round(amount / 100000000).toLocaleString("ko-KR") + "억";
+    if (amount >= 10000) return Math.round(amount / 10000).toLocaleString("ko-KR") + "만";
+    return Math.round(amount).toLocaleString("ko-KR");
+  }
+
+  function formatNumber(value) {
+    return Number(value || 0).toLocaleString("ko-KR");
   }
 
   function filterGrants(items, options) {
@@ -647,6 +738,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
