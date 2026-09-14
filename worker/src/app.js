@@ -39,12 +39,24 @@ export const APP_JS = String.raw`
     var errorState = React.useState("");
     var error = errorState[0];
     var setError = errorState[1];
-    var companyState = React.useState("전체");
-    var company = companyState[0];
-    var setCompany = companyState[1];
-    var queryState = React.useState("");
-    var query = queryState[0];
-    var setQuery = queryState[1];
+    var disclosureCompanyState = React.useState("전체");
+    var disclosureCompany = disclosureCompanyState[0];
+    var setDisclosureCompany = disclosureCompanyState[1];
+    var disclosureQueryState = React.useState("");
+    var disclosureQuery = disclosureQueryState[0];
+    var setDisclosureQuery = disclosureQueryState[1];
+    var newsCompanyState = React.useState("전체");
+    var newsCompany = newsCompanyState[0];
+    var setNewsCompany = newsCompanyState[1];
+    var newsQueryState = React.useState("");
+    var newsQuery = newsQueryState[0];
+    var setNewsQuery = newsQueryState[1];
+    var newsSortState = React.useState("latest");
+    var newsSort = newsSortState[0];
+    var setNewsSort = newsSortState[1];
+    var newsGroupState = React.useState(true);
+    var newsGroup = newsGroupState[0];
+    var setNewsGroup = newsGroupState[1];
     var archiveState = React.useState([]);
     var archives = archiveState[0];
     var setArchives = archiveState[1];
@@ -129,8 +141,8 @@ export const APP_JS = String.raw`
     var calendarStatus = (data && data.calendar_status) || {};
     var todayDisclosures = disclosures.filter(function (item) { return sameDay(item); });
     var todayNews = news.filter(function (item) { return sameDay(item); });
-    var filteredDisclosures = filterItems(disclosures, company, query);
-    var filteredNews = filterItems(news, company, query);
+    var filteredDisclosures = filterItems(disclosures, disclosureCompany, disclosureQuery);
+    var filteredNews = prepareNewsItems(filterItems(news, newsCompany, newsQuery), { grouped: newsGroup, sort: newsSort });
 
     return h("div", { className: "app-shell" },
       h(Sidebar, { active: active, setActive: setActive }),
@@ -139,8 +151,8 @@ export const APP_JS = String.raw`
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
         !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
-        !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
-        !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "10개 경쟁사 관련 뉴스를 시간순으로 확인합니다.", items: filteredNews, type: "news", company: company, setCompany: setCompany, query: query, setQuery: setQuery }) : null,
+        !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: disclosureCompany, setCompany: setDisclosureCompany, query: disclosureQuery, setQuery: setDisclosureQuery }) : null,
+        !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
         !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
@@ -310,7 +322,18 @@ export const APP_JS = String.raw`
   }
 
   function DataPage(props) {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: props.items.length + "건" }), h("div", { className: "content-toolbar" }, h("select", { className: "field", value: props.company, onChange: function (event) { props.setCompany(event.target.value); } }, COMPANIES.map(function (name) { return h("option", { key: name, value: name }, name); })), h("input", { className: "field", value: props.query, onChange: function (event) { props.setQuery(event.target.value); }, placeholder: "회사명, 제목, 내용 검색" })), h("div", { className: "data-list" }, props.items.length ? props.items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))));
+    var isNews = props.type === "news";
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: props.items.length + "건" }),
+      h("div", { className: isNews ? "content-toolbar news-toolbar" : "content-toolbar" },
+        h("select", { className: "field", value: props.company, onChange: function (event) { props.setCompany(event.target.value); } }, COMPANIES.map(function (name) { return h("option", { key: name, value: name }, name); })),
+        isNews ? h("select", { className: "field", value: props.sort || "latest", onChange: function (event) { props.setSort(event.target.value); } }, [h("option", { value: "latest" }, "최신순"), h("option", { value: "company" }, "회사순")]) : null,
+        h("input", { className: "field", value: props.query, onChange: function (event) { props.setQuery(event.target.value); }, placeholder: isNews ? "제목, 내용, AI 요약 검색" : "회사명, 제목, 내용 검색" }),
+        isNews ? h("label", { className: "toggle-field" }, h("input", { type: "checkbox", checked: !!props.grouped, onChange: function (event) { props.setGrouped(event.target.checked); } }), h("span", null, "유사 뉴스 묶기")) : null
+      ),
+      isNews ? h("div", { className: "news-grid" }, props.items.length ? props.items.map(function (item) { return h(NewsCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
+        h("div", { className: "data-list" }, props.items.length ? props.items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))
+    ));
   }
 
 
@@ -1048,6 +1071,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
