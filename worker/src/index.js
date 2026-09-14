@@ -1191,7 +1191,13 @@ async function collectFinancialMetrics(env, diagnostics) {
     url.searchParams.set("bsns_year", fiscalYear);
     url.searchParams.set("reprt_code", reportCode);
     try {
-      const payload = await fetchJson(url.toString(), { headers: { Accept: "application/json,text/plain,*/*" } });
+      const payload = await fetchJson(url.toString(), {
+        redirect: "manual",
+        headers: {
+          "Accept": "application/json,text/plain,*/*",
+          "User-Agent": "Mozilla/5.0 competitor-newsletter/1.0",
+        },
+      });
       diagnostics.push({ step: "dart_financials", company: company.name, year: fiscalYear, report_code: reportCode, status: payload.status || "unknown", count: Array.isArray(payload.list) ? payload.list.length : 0 });
       if (payload.status !== "000") continue;
       for (const item of payload.list || []) {
@@ -1997,12 +2003,14 @@ async function fetchJson(url, init = {}) {
     const error = new Error("redirect_response");
     error.status = response.status;
     error.host = new URL(url).host;
+    error.location = response.headers.get("location") || "";
     throw error;
   }
   if (!response.ok) {
     const error = new Error("fetch_not_ok");
     error.status = response.status;
     error.host = new URL(url).host;
+    error.location = response.headers.get("location") || "";
     throw error;
   }
   return await response.json();
@@ -2051,6 +2059,7 @@ function safeError(error) {
   if (error.status) parts.push(`http_${error.status}`);
   if (error.name) parts.push(error.name);
   if (error.message) parts.push(sanitizeErrorMessage(error.message));
+  if (error.location) parts.push(`location=${sanitizeErrorMessage(error.location)}`);
   if (parts.length) return parts.join(":").slice(0, 160);
   return "error";
 }
@@ -2209,21 +2218,4 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

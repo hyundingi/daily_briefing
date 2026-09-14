@@ -170,6 +170,11 @@ button { border: 0; cursor: pointer; }
 .division-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .profit-table { display: grid; gap: 8px; }
+.finance-empty-state { display: grid; gap: 10px; min-height: 210px; place-content: center; padding: 28px; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(248,232,231,0.52)); border: 1px dashed rgba(148,64,60,0.28); text-align: center; }
+.finance-empty-title { margin: 0; color: var(--primary-900); font-size: 17px; font-weight: 950; }
+.finance-empty-text { max-width: 520px; margin: 0 auto; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.finance-empty-guide { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin: 4px auto 0; padding: 8px 12px; border-radius: 999px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 850; }
+.finance-empty-guide strong { color: var(--primary-900); }
 .finance-chart { display: grid; gap: 10px; margin-bottom: 14px; padding: 16px; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(248,232,231,0.45)); border: 1px solid rgba(234,223,221,0.76); }
 .finance-chart-head, .finance-chart-row { display: grid; grid-template-columns: 94px minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; align-items: center; }
 .finance-chart-head { color: var(--muted); font-size: 11px; font-weight: 950; }
@@ -392,14 +397,4 @@ button { border: 0; cursor: pointer; }
   .finance-row, .finance-chart-head, .finance-chart-row { grid-template-columns: 1fr; }
 }
 `;
-
-
-
-
-
-
-
-
-
-
 

@@ -150,11 +150,11 @@ export const APP_JS = String.raw`
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
-        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
+        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive, refreshFinancials: refreshFinancials }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: disclosureCompany, setCompany: setDisclosureCompany, query: disclosureQuery, setQuery: setDisclosureQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, rawItems: news, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
-        !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
+        !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true, onRefresh: refreshFinancials }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
         !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
@@ -204,7 +204,7 @@ export const APP_JS = String.raw`
         h(KpiCard, { label: "오늘 일정", value: props.calendarEvents.length, unit: "건", foot: props.calendarStatus && props.calendarStatus.configured ? "Google Calendar" : "캘린더 설정 전" })
       ),
       h("section", { className: "dashboard-grid" },
-        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
+        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials, onRefresh: props.refreshFinancials }), h(ProfitPanel, null), h(CashPanel, null)),
         h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
@@ -227,7 +227,7 @@ export const APP_JS = String.raw`
       )
     ) : h(FinancePlaceholderChart, null);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API" }),
+      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, rows.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
       content
     ));
   }
@@ -252,11 +252,9 @@ export const APP_JS = String.raw`
   }
 
   function FinancePlaceholderChart() {
-    return h("div", { className: "chart-card" },
-      h("div", { className: "chart-grid" }),
-      h("div", { className: "chart-line" }),
-      h("div", { className: "chart-line alt" }),
-      h("div", { className: "chart-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익"))
+    return h("div", { className: "finance-empty-state" },
+      h("p", { className: "finance-empty-title" }, "아직 표시할 DART 재무 데이터가 없습니다."),
+      h("p", { className: "finance-empty-text" }, "관리자 메뉴의 DART 재무 수집을 실행하면 회사별 매출액과 영업이익 비교가 표시됩니다.")
     );
   }
 
@@ -1132,30 +1130,4 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
