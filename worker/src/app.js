@@ -218,7 +218,7 @@ export const APP_JS = String.raw`
     var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
     var visibleRows = rows.slice(0, props && props.expanded ? 10 : 6);
     var content = rows.length ? h(React.Fragment, null,
-      h(FinanceBarChart, { rows: visibleRows }),
+      h(FinanceLineChart, { rows: visibleRows }),
       h("div", { className: "finance-table compact" },
         h("div", { className: "finance-row head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "기준")),
         visibleRows.map(function (row) {
@@ -232,21 +232,38 @@ export const APP_JS = String.raw`
     ));
   }
 
-  function FinanceBarChart(props) {
+  function FinanceLineChart(props) {
     var rows = props.rows || [];
+    var width = 720;
+    var height = 260;
+    var pad = { left: 42, right: 24, top: 22, bottom: 58 };
+    var innerW = width - pad.left - pad.right;
+    var innerH = height - pad.top - pad.bottom;
     var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.revenue || 0))); }, 1);
     var maxProfit = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.operatingProfit || 0))); }, 1);
-    return h("div", { className: "finance-chart" },
-      h("div", { className: "finance-chart-head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익")),
-      rows.map(function (row) {
-        var revenueWidth = Math.max(3, Math.round(Math.abs(Number(row.revenue || 0)) / maxRevenue * 100));
-        var profitWidth = Math.max(3, Math.round(Math.abs(Number(row.operatingProfit || 0)) / maxProfit * 100));
-        return h("div", { className: "finance-chart-row", key: "chart-" + row.company },
-          h("div", { className: "finance-company" }, row.company),
-          h("div", { className: "finance-bar-cell" }, h("div", { className: "finance-bar revenue", style: { width: revenueWidth + "%" } }, h("span", null, formatAmount(row.revenue)))),
-          h("div", { className: "finance-bar-cell" }, h("div", { className: Number(row.operatingProfit || 0) < 0 ? "finance-bar profit negative" : "finance-bar profit", style: { width: profitWidth + "%" } }, h("span", null, formatAmount(row.operatingProfit))))
-        );
-      }),
+    function x(index) { return pad.left + (rows.length <= 1 ? innerW / 2 : index * innerW / (rows.length - 1)); }
+    function y(value, max) { return pad.top + innerH - Math.max(0, Math.min(1, Math.abs(Number(value || 0)) / max)) * innerH; }
+    function points(key, max) { return rows.map(function (row, index) { return x(index) + "," + y(row[key], max); }).join(" "); }
+    return h("div", { className: "finance-line-card" },
+      h("div", { className: "finance-line-note" }, "회사별 비교가 잘 보이도록 매출액과 영업이익은 각각 최대값 대비 비율로 표시합니다."),
+      h("svg", { className: "finance-line-chart", viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": "상위사 매출액과 영업이익 비교 그래프" },
+        [0, 0.25, 0.5, 0.75, 1].map(function (tick) {
+          var yPos = pad.top + innerH - tick * innerH;
+          return h("g", { key: "grid-" + tick },
+            h("line", { x1: pad.left, y1: yPos, x2: width - pad.right, y2: yPos, className: "finance-grid-line" }),
+            h("text", { x: pad.left - 10, y: yPos + 4, className: "finance-axis-text", textAnchor: "end" }, Math.round(tick * 100) + "%")
+          );
+        }),
+        h("polyline", { points: points("revenue", maxRevenue), className: "finance-polyline revenue" }),
+        h("polyline", { points: points("operatingProfit", maxProfit), className: "finance-polyline profit" }),
+        rows.map(function (row, index) {
+          return h("g", { key: "point-" + row.company },
+            h("circle", { cx: x(index), cy: y(row.revenue, maxRevenue), r: 4.5, className: "finance-dot revenue" }),
+            h("circle", { cx: x(index), cy: y(row.operatingProfit, maxProfit), r: 4.5, className: "finance-dot profit" }),
+            h("text", { x: x(index), y: height - 31, className: "finance-company-label", textAnchor: "end", transform: "rotate(-28 " + x(index) + " " + (height - 31) + ")" }, row.company)
+          );
+        })
+      ),
       h("div", { className: "chart-legend finance-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익"))
     );
   }
@@ -1130,4 +1147,5 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
