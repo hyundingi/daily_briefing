@@ -682,14 +682,74 @@ async function calendarEvents(env, diagnostics = []) {
   url.searchParams.set("maxResults", "20");
 
   try {
-    const payload = await fetchJson(url.toString(), { headers: { Accept: "application/json" } });
+    const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    const responseText = await response.text();
+    if (!response.ok) {
+      const errorMessage = googleCalendarErrorMessage(responseText, response.status);
+      diagnostics.push({
+        step: "google_calendar",
+        status: "http_error",
+        http_status: response.status,
+        error: errorMessage,
+      });
+      return {
+        events: [],
+        status: {
+          ok: false,
+          configured: true,
+          http_status: response.status,
+          message: errorMessage,
+          updated_at: kstTimestamp(new Date()),
+        },
+      };
+    }
+
+    const payload = JSON.parse(responseText || "{}");
     const events = (payload.items || []).map(calendarEventFromGoogle).filter((item) => item.title);
     diagnostics.push({ step: "google_calendar", status: "ok", count: events.length });
     return { events, status: { ok: true, configured: true, count: events.length, updated_at: kstTimestamp(new Date()) } };
   } catch (error) {
     diagnostics.push({ step: "google_calendar", status: "exception", error: safeError(error) });
-    return { events: [], status: { ok: false, configured: true, message: "Google Calendar 일정을 불러오지 못했습니다." } };
+    return {
+      events: [],
+      status: {
+        ok: false,
+        configured: true,
+        message: safeError(error) || "Google Calendar 일정을 불러오지 못했습니다.",
+        updated_at: kstTimestamp(new Date()),
+      },
+    };
   }
+}
+
+function googleCalendarErrorMessage(responseText, status) {
+  let message = "";
+  let reason = "";
+  try {
+    const payload = JSON.parse(responseText || "{}");
+    const error = payload.error || {};
+    message = clean(error.message || "");
+    reason = clean((error.errors || [])[0]?.reason || error.status || "");
+  } catch (_) {
+    message = clean(responseText || "");
+  }
+
+  const safeMessage = sanitizeErrorMessage(message).slice(0, 220);
+  if (status === 400) {
+    return safeMessage || "Google Calendar 요청값이 올바르지 않습니다. Calendar ID 형식을 확인해주세요.";
+  }
+  if (status === 401) {
+    return safeMessage || "Google Calendar API 키 인증에 실패했습니다. API 키 값을 확인해주세요.";
+  }
+  if (status === 403) {
+    if (reason === "accessNotConfigured") return "Google Calendar API가 사용 설정되어 있지 않거나 API 키 제한에 막혀 있습니다.";
+    if (reason === "forbidden") return "캘린더가 공개되어 있지 않아 API 키만으로 읽을 수 없습니다.";
+    return safeMessage || "Google Calendar 접근 권한이 없습니다. 캘린더 공개 범위 또는 API 키 제한을 확인해주세요.";
+  }
+  if (status === 404) {
+    return safeMessage || "Google Calendar ID를 찾지 못했습니다. calendarId가 맞는지 확인해주세요.";
+  }
+  return safeMessage || `Google Calendar API 오류(${status})`;
 }
 
 function calendarEventFromGoogle(item) {
@@ -1266,12 +1326,12 @@ function normalizeGovernmentProjects(payload, source, keyword) {
     const explicitDeadline = normalizeGovernmentDate(firstField(row, ["deadline", "endDate", "End", "ProjectPeriod_End", "ProjectPeriodEnd", "receptionEndDate", "pbancRcptEndYmd", "pbanc_rcpt_end_dt", "reqstEndDate", "접수마감일", "신청마감일", "endYmd"]));
     const deadline = explicitDeadline || periodEndDate(period, announcementDate);
     const externalId = clean(firstField(row, ["pblancId", "pbancSn", "bizPbancSn", "pbanc_sn", "biz_pbanc_sn", "linkid", "titleid", "boardid", "ProjectNumber", "projectNumber", "과제고유번호", "공고번호", "id"]));
-    result.push({
+    const item = {
       source: source.name,
       external_id: externalId,
       title: clean(title),
       agency: source.key === "khidi" ? "한국보건산업진흥원" : clean(firstField(row, ["agency", "agencyName", "jrsdInsttNm", "sprv_inst", "pbanc_ntrp_nm", "biz_prch_dprt_nm", "OrderAgency_Name", "ResearchAgency_Name", "Ministry_Name", "OrderAgency", "ResearchAgency", "Ministry", "Name", "기관명", "소관부처", "department", "organNm"])),
-      category: clean(firstField(row, ["category", "bizCategory", "supportType", "supt_biz_clsfc", "분야", "사업분류"])) || (source.key === "khidi" ? "보건산업 공고" : keyword),
+      category: clean(firstField(row, ["category", "bizCategory", "supportType", "supt_biz_clsfc", "분야", "사업분류"])) || defaultGovernmentCategory(source),
       summary: clean(firstField(row, ["summary", "description", "content", "supportContent", "pbanc_ctnt", "bsnsSumryCn", "Goal_Full", "Abstract_Full", "Effect_Full", "Goal", "Abstract", "Effect", "사업내용", "지원내용", "사업소개정보"])),
       link: link ? String(link).trim() : khidiDetailUrl(row),
       announcement_date: announcementDate,
@@ -1281,9 +1341,41 @@ function normalizeGovernmentProjects(payload, source, keyword) {
       target: clean(firstField(row, ["target", "supportTarget", "aply_trgt", "aply_trgt_ctnt", "사업지원대상정보", "지원대상", "대상"])),
       keywords: keyword,
       raw_json: JSON.stringify(row).slice(0, 5000),
-    });
+    };
+    if (!source.keywordless && keyword && !governmentKeywordMatches(item, keyword)) continue;
+    result.push(item);
   }
   return result;
+}
+
+function defaultGovernmentCategory(source) {
+  if (source.key === "khidi") return "보건산업 공고";
+  if (source.key === "ntis") return "R&D 과제";
+  if (source.key === "kstartup") return "창업지원 공고";
+  if (source.key === "iris") return "R&D 공고";
+  return "지원사업 공고";
+}
+
+function governmentKeywordMatches(item, keyword) {
+  const normalizedKeyword = clean(keyword);
+  if (!normalizedKeyword) return true;
+  const haystack = [item.title, item.summary, item.category, item.agency, item.target, item.budget, item.raw_json]
+    .map((value) => clean(value))
+    .filter(Boolean)
+    .join(" ");
+  return governmentKeywordPattern(normalizedKeyword).test(haystack);
+}
+
+function governmentKeywordPattern(keyword) {
+  const compact = normalize(keyword);
+  if (["rd", "rnd", "r앤d", "r&d"].includes(compact)) {
+    return /(^|[^A-Za-z0-9])(?:r\s*&\s*d|r\s*n\s*d|research\s+and\s+development)(?=$|[^A-Za-z0-9])|연구\s*개발/i;
+  }
+  return new RegExp(escapeRegExp(keyword).replace(/\s+/g, "\\s*"), "i");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function findGovernmentRows(payload) {
@@ -2056,6 +2148,8 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
 
 
 

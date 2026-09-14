@@ -370,7 +370,7 @@ export const APP_JS = String.raw`
       props && props.expanded ? h("div", { className: "grant-toolbar" },
         h("div", { className: "grant-filter-group" },
           h("select", { className: "field", value: source, onChange: resetPage(function (event) { setSource(event.target.value); }) }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
-          h("select", { className: "field", value: topic, onChange: resetPage(function (event) { setTopic(event.target.value); }) }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 키워드" : name); })),
+          h("select", { className: "field", value: topic, onChange: resetPage(function (event) { setTopic(event.target.value); }) }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 분류" : name); })),
           h("label", { className: "check-field" }, h("input", { type: "checkbox", checked: includeClosed, onChange: resetPage(function (event) { setIncludeClosed(event.target.checked); }) }), h("span", null, "마감 공고 포함"))
         ),
         h("div", { className: "grant-search-group" },
@@ -392,7 +392,7 @@ export const APP_JS = String.raw`
     return h("article", { className: props.compact ? "grant-card compact" : "grant-card" },
       h("div", { className: "grant-top" }, h("span", { className: "dday-badge" }, ddayText(item.deadline)), h("span", { className: "grant-source" }, item.source || "국책과제")),
       h(item.link ? "a" : "p", { className: "mini-title", href: item.link || undefined, target: item.link ? "_blank" : undefined, rel: item.link ? "noreferrer" : undefined }, item.title || "제목 없음"),
-      h("p", { className: "mini-text" }, [item.agency, item.category, deadlineLabel(item.deadline)].filter(Boolean).join(" · ")),
+      h("p", { className: "mini-text" }, [item.agency, item.category, item.keywords && item.keywords !== item.category ? "검색어 " + item.keywords : "", deadlineLabel(item.deadline)].filter(Boolean).join(" · ")),
       item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null,
       item.budget || item.target ? h("p", { className: "mini-text" }, [item.budget ? "지원규모: " + item.budget : "", item.target ? "대상: " + item.target : ""].filter(Boolean).join(" / ")) : null
     );
@@ -585,6 +585,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
