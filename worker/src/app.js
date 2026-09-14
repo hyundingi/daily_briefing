@@ -416,14 +416,15 @@ export const APP_JS = String.raw`
     var rdRemote = rdRemoteState[0];
     var setRdRemote = rdRemoteState[1];
     React.useEffect(function () {
-      if (!(props && props.expanded)) return;
+      var shouldLoadRd = !!(props && (props.expanded || props.setActive));
+      if (!shouldLoadRd) return;
       setRdRemote(function (prev) { return prev.items.length ? prev : { loading: true, items: [], error: "" }; });
-      fetch("/api/rd/projects?limit=2000")
+      fetch("/api/rd/projects?limit=" + (props && props.expanded ? "2000" : "300"))
         .then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
         .then(function (result) { setRdRemote(result.ok ? { loading: false, items: result.json.items || [], error: "" } : { loading: false, items: [], error: result.json.error || "NTIS 데이터를 불러오지 못했습니다." }); })
         .catch(function (error) { setRdRemote({ loading: false, items: [], error: error.message || String(error) }); });
-    }, [props && props.expanded]);
-    var ntisItems = (props && props.expanded ? rdRemote.items : (props && props.grants ? props.grants : [])).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
+    }, [props && props.expanded, props && props.setActive]);
+    var ntisItems = (rdRemote.items.length ? rdRemote.items : (props && props.grants ? props.grants : [])).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
     var keywordState = React.useState("전체");
     var focusKeyword = keywordState[0];
     var setFocusKeyword = keywordState[1];
@@ -439,7 +440,8 @@ export const APP_JS = String.raw`
     var pageState = React.useState(1);
     var page = pageState[0];
     var setPage = pageState[1];
-    var aiState = React.useState({ loading: false, text: "", error: "" });
+    var storedAiText = readStoredAiStrategy(focusKeyword, agencyFilter, yearFilter);
+    var aiState = React.useState({ loading: false, text: storedAiText, error: "" });
     var aiStrategy = aiState[0];
     var setAiStrategy = aiState[1];
     var keywordOptions = ["전체"].concat(rdAvailableKeywords(ntisItems));
@@ -457,8 +459,11 @@ export const APP_JS = String.raw`
     if (safePage !== page) setTimeout(function () { setPage(safePage); }, 0);
     var projectRows = sortedProjects.slice((safePage - 1) * pageSize, safePage * pageSize);
     var insights = strategicRdInsights({ total: ntisItems.length, filtered: filtered, stats: stats, keyword: focusKeyword, agency: agencyFilter, competitors: competitorRows, years: years, trendRows: trendRows });
+    React.useEffect(function () {
+      setAiStrategy({ loading: false, text: readStoredAiStrategy(focusKeyword, agencyFilter, yearFilter), error: "" });
+    }, [focusKeyword, agencyFilter, yearFilter]);
     function resetPage(setter) {
-      return function (event) { setter(event.target.value); setPage(1); setAiStrategy({ loading: false, text: "", error: "" }); };
+      return function (event) { setter(event.target.value); setPage(1); };
     }
     function requestAiStrategy() {
       var password = window.prompt("관리자 비밀번호를 입력해주세요.");
@@ -480,7 +485,15 @@ export const APP_JS = String.raw`
           samples: sortedProjects.slice(0, 10).map(function (item) { return { title: item.title, agency: item.agency, category: item.category, year: rdYear(item), summary: cleanSnippet(item.summary || "").slice(0, 180) }; })
         })
       }).then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
-        .then(function (result) { setAiStrategy(result.ok ? { loading: false, text: result.json.analysis || "", error: "" } : { loading: false, text: "", error: result.json.error || "Gemini 분석에 실패했습니다." }); })
+        .then(function (result) {
+          if (result.ok) {
+            var text = result.json.analysis || "";
+            saveStoredAiStrategy(focusKeyword, agencyFilter, yearFilter, text);
+            setAiStrategy({ loading: false, text: text, error: "" });
+          } else {
+            setAiStrategy({ loading: false, text: "", error: result.json.error || "Gemini 분석에 실패했습니다." });
+          }
+        })
         .catch(function (error) { setAiStrategy({ loading: false, text: "", error: error.message || String(error) }); });
     }
     return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
@@ -500,7 +513,7 @@ export const APP_JS = String.raw`
         ),
         h("div", { className: "strategy-box impact" },
           h("div", { className: "strategy-head" }, h("p", { className: "strategy-title" }, "전략적으로 볼 점"), h("button", { className: "ghost-button", disabled: aiStrategy.loading, onClick: requestAiStrategy }, aiStrategy.loading ? "Gemini 분석 중…" : "Gemini로 분석")),
-          aiStrategy.text ? h("div", { className: "ai-strategy" }, aiStrategy.text.split(new RegExp("\\n+")).filter(Boolean).map(function (line, index) { return h("p", { key: index }, line.replace(/^[-•]\s*/, "")); })) : h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); })),
+          aiStrategy.text ? h("div", { className: "ai-strategy" }, renderAiStrategy(aiStrategy.text)) : h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); })),
           aiStrategy.error ? h("p", { className: "mini-text error-text" }, aiStrategy.error) : null
         ),
         h("div", { className: "rd-analysis-grid focused" },
@@ -511,8 +524,8 @@ export const APP_JS = String.raw`
         ),
         h("div", { className: "project-explorer" },
           h("div", { className: "project-explorer-head" }, h("h3", null, "과제 탐색"), h("span", null, "전체 " + formatNumber(sortedProjects.length) + "건 중 " + (sortedProjects.length ? ((safePage - 1) * pageSize + 1) + "-" + Math.min(sortedProjects.length, safePage * pageSize) : "0") + "건 표시")),
-          h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, projectRows.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
-            h("p", { className: "trend-title" }, item.title || "제목 없음"),
+          h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, projectRows.map(function (item) { var projectUrl = projectLink(item); return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
+            h(projectUrl ? "a" : "p", { className: "trend-title", href: projectUrl || undefined, target: projectUrl ? "_blank" : undefined, rel: projectUrl ? "noreferrer" : undefined }, item.title || "제목 없음"),
             h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date, item.budget ? formatMoney(parseMoney(item.budget)) : ""].filter(Boolean).join(" · ")),
             item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
           ); })),
@@ -524,6 +537,48 @@ export const APP_JS = String.raw`
         )
       ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. R&D 동향 탭에서 데이터를 다시 확인해주세요.")
     ));
+  }
+
+
+  function aiStorageKey(keyword, agency, year) {
+    return "insight-board:rd-strategy:" + [keyword || "전체", agency || "전체", year || "전체"].join(":");
+  }
+
+  function readStoredAiStrategy(keyword, agency, year) {
+    try { return window.localStorage.getItem(aiStorageKey(keyword, agency, year)) || ""; } catch (_) { return ""; }
+  }
+
+  function saveStoredAiStrategy(keyword, agency, year, text) {
+    try { if (text) window.localStorage.setItem(aiStorageKey(keyword, agency, year), text); } catch (_) {}
+  }
+
+  function cleanMarkdownText(value) {
+    return String(value || "")
+      .replace(/\\\*/g, "*")
+      .replace(/\*\*/g, "")
+      .replace(new RegExp(String.fromCharCode(96), "g"), "")
+      .replace(/^\s*[-*•]\s*/, "")
+      .trim();
+  }
+
+  function renderAiStrategy(text) {
+    var normalized = String(text || "").replace(/\r/g, "");
+    normalized = normalized.replace(/\s*\*\s*\*\*/g, "\n**");
+    var lines = normalized.split(new RegExp("\\n+")).map(cleanMarkdownText).filter(Boolean);
+    return lines.map(function (line, index) {
+      var match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+      if (match) return h("article", { className: "ai-strategy-card", key: index }, h("strong", null, match[1]), match[2] ? h("p", null, match[2]) : null);
+      if (index === 0 && line.indexOf("경영기획팀 R&D 전략 코멘트") >= 0) return h("p", { className: "ai-strategy-kicker", key: index }, line);
+      return h("p", { key: index }, line);
+    });
+  }
+
+  function projectLink(item) {
+    if (item && item.link) return item.link;
+    if (item && String(item.source || "").toUpperCase().indexOf("NTIS") >= 0 && item.title) {
+      return "https://www.ntis.go.kr/ThSearchResult.do?searchWord=" + encodeURIComponent(item.title);
+    }
+    return "";
   }
 
   function TrendBox(props) {
@@ -920,6 +975,10 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
+
+
 
 
 

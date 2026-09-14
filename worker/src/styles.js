@@ -276,8 +276,12 @@ button { border: 0; cursor: pointer; }
 .strategy-box.impact { border-left: 5px solid var(--primary-800); }
 .strategy-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
 .strategy-title { margin: 0; color: var(--primary-900); font-size: 15px; font-weight: 950; }
-.ai-strategy { display: grid; gap: 7px; color: #4f4948; font-size: 13px; line-height: 1.65; }
-.ai-strategy p { margin: 0; padding-left: 12px; border-left: 3px solid rgba(148,64,60,0.28); }
+.ai-strategy { display: grid; gap: 10px; color: #4f4948; font-size: 13px; line-height: 1.65; }
+.ai-strategy > p { margin: 0; }
+.ai-strategy-kicker { color: var(--primary-900); font-weight: 900; }
+.ai-strategy-card { padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,0.72); border: 1px solid rgba(230,173,170,0.45); box-shadow: 0 10px 24px rgba(111,48,45,0.06); }
+.ai-strategy-card strong { display: block; margin-bottom: 5px; color: var(--primary-900); font-size: 13px; font-weight: 950; }
+.ai-strategy-card p { margin: 0; color: #4f4948; }
 .error-text { color: #a33; }
 .strategy-box ul { margin: 0; padding-left: 18px; color: #4f4948; font-size: 13px; line-height: 1.65; }
 .strategy-box li + li { margin-top: 4px; }
@@ -360,6 +364,8 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;
+
+
 
 
 
