@@ -500,8 +500,7 @@ export const APP_JS = String.raw`
         ),
         h("div", { className: "strategy-box impact" },
           h("div", { className: "strategy-head" }, h("p", { className: "strategy-title" }, "전략적으로 볼 점"), h("button", { className: "ghost-button", disabled: aiStrategy.loading, onClick: requestAiStrategy }, aiStrategy.loading ? "Gemini 분석 중…" : "Gemini로 분석")),
-          aiStrategy.text ? h("div", { className: "ai-strategy" }, aiStrategy.text.split(/
-+/).filter(Boolean).map(function (line, index) { return h("p", { key: index }, line.replace(/^[-•]\s*/, "")); })) : h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); })),
+          aiStrategy.text ? h("div", { className: "ai-strategy" }, aiStrategy.text.split(new RegExp("\\n+")).filter(Boolean).map(function (line, index) { return h("p", { key: index }, line.replace(/^[-•]\s*/, "")); })) : h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); })),
           aiStrategy.error ? h("p", { className: "mini-text error-text" }, aiStrategy.error) : null
         ),
         h("div", { className: "rd-analysis-grid focused" },
@@ -921,6 +920,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
