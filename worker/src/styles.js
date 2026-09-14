@@ -248,6 +248,17 @@ button { border: 0; cursor: pointer; }
 .grant-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .grant-source { color: var(--primary-900); font-size: 12px; font-weight: 950; }
 .grant-summary { margin: 9px 0 0; color: #5f5655; font-size: 13px; line-height: 1.58; }
+.trend-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.trend-box { padding: 15px; border-radius: 18px; background: linear-gradient(145deg, rgba(248,232,231,0.72), rgba(255,255,255,0.8)); border: 1px solid var(--line); }
+.trend-box span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 12px; font-weight: 900; }
+.trend-box strong { display: block; color: var(--primary-900); font-size: 15px; line-height: 1.45; letter-spacing: -0.03em; }
+.trend-box p { margin: 8px 0 0; color: #8d8584; font-size: 12px; line-height: 1.45; }
+.trend-list { display: grid; gap: 10px; }
+.trend-list.expanded { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.trend-card { padding: 14px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); }
+.trend-title { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.45; font-weight: 950; letter-spacing: -0.025em; }
+.trend-list.expanded .trend-title,
+.trend-list.expanded .grant-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .grant-card.compact .mini-title,
 .grant-card.compact .mini-text,
 .grant-card.compact .grant-summary,
@@ -311,12 +322,13 @@ button { border: 0; cursor: pointer; }
   .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .cash-grid { grid-template-columns: 1fr; }
   .grant-toolbar { align-items: stretch; }
   .grant-filter-group, .grant-search-group { width: 100%; justify-content: flex-start; margin-left: 0; }
-  .grant-grid.expanded { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grant-grid.expanded, .trend-list.expanded, .trend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grant-filter-group .field, .grant-search { width: 100%; }
   .profit-row { grid-template-columns: 1fr 1fr; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;
+
 
 
 

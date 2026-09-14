@@ -21,6 +21,8 @@ export const APP_JS = String.raw`
     ["profit", "▦", "손익"],
     ["cash", "₩", "자금현황"],
     ["schedule", "◇", "일정"],
+    ["grants", "✦", "국책과제"],
+    ["rd_trends", "◎", "R&D 동향"],
     ["disclosures", "□", "공시"],
     ["news", "◌", "뉴스"]
   ];
@@ -144,7 +146,9 @@ export const APP_JS = String.raw`
         !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
-        !loading && active === "schedule" ? h(SchedulePage, { grants: grants, calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
+        !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
+        !loading && active === "grants" ? h(GrantsPage, { grants: grants }) : null,
+        !loading && active === "rd_trends" ? h(RdTrendPage, { grants: grants }) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
           h("button", { className: "ghost-button", onClick: summarizeMissing }, "AI 요약 채우기"),
           h("button", { className: "ghost-button", onClick: refreshGrants }, "국책과제 수집"),
@@ -173,7 +177,7 @@ export const APP_JS = String.raw`
 
   function Topbar(props) {
     return h("header", { className: "topbar" },
-      h("div", null, h("p", { className: "page-kicker" }, "Insight Board"), h("h1", { className: "page-title" }, "경영기획팀 Insight Board"), h("p", { className: "page-desc" }, "경쟁사 공시와 뉴스, 재무 지표, 실적 관리, 일정과 국책과제 정보를 한 화면에서 볼 수 있도록 확장하는 첫 화면입니다.")),
+      h("div", null, h("p", { className: "page-kicker" }, "Insight Board"), h("h1", { className: "page-title" }, "경영기획팀 Insight Board"), h("p", { className: "page-desc" }, "경쟁사 공시와 뉴스, 재무 지표, 실적 관리, 일정, 국책과제와 R&D 동향을 한 화면에서 볼 수 있도록 확장하는 첫 화면입니다.")),
       h("div", { className: "topbar-actions" },
         h("div", { className: "updated-chip" }, "데이터 업데이트: " + formatDateTime(props.data && props.data.updated_at)),
         h("button", { className: "ghost-button", onClick: function () { props.setActive("archive"); } }, "뉴스레터 아카이브")
@@ -191,7 +195,7 @@ export const APP_JS = String.raw`
       ),
       h("section", { className: "dashboard-grid" },
         h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
-        h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(RdTrendPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
   }
@@ -287,7 +291,15 @@ export const APP_JS = String.raw`
   }
 
   function SchedulePage(props) {
-    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, expanded: true }));
+    return h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }));
+  }
+
+  function GrantsPage(props) {
+    return h("div", { className: "stack" }, h(GrantPanel, { grants: props.grants, expanded: true }));
+  }
+
+  function RdTrendPage(props) {
+    return h("div", { className: "stack" }, h(RdTrendPanel, { grants: props.grants, expanded: true }));
   }
 
   function IntelligencePanel(props) {
@@ -366,7 +378,7 @@ export const APP_JS = String.raw`
       };
     }
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 국책과제", subtitle: "기업마당·K-Startup·IRIS·KHIDI 공고를 마감일 가까운 순으로 봅니다. NTIS는 승인/IP 등록 대기 상태입니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("schedule"); } }, "전체보기")] : null }),
+      h(PanelHead, { title: "국책과제 공고", subtitle: "기업마당·K-Startup·IRIS·KHIDI 등 신청 가능한 공고를 마감일 가까운 순으로 봅니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("grants"); } }, "전체보기")] : null }),
       props && props.expanded ? h("div", { className: "grant-toolbar" },
         h("div", { className: "grant-filter-group" },
           h("select", { className: "field", value: source, onChange: resetPage(function (event) { setSource(event.target.value); }) }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
@@ -396,6 +408,33 @@ export const APP_JS = String.raw`
       item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null,
       item.budget || item.target ? h("p", { className: "mini-text" }, [item.budget ? "지원규모: " + item.budget : "", item.target ? "대상: " + item.target : ""].filter(Boolean).join(" / ")) : null
     );
+  }
+
+
+  function RdTrendPanel(props) {
+    var ntisItems = (props && props.grants ? props.grants : []).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
+    var topics = topGrantKeywords(ntisItems);
+    var agencies = topGrantValues(ntisItems, "agency");
+    var recent = ntisItems.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 12 : 3);
+    return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제 정보를 기반으로 정부 R&D 투자 방향과 수행기관 흐름을 분리해서 봅니다.", pill: ntisItems.length ? ntisItems.length + "건" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "자세히 보기")] : null }),
+      ntisItems.length ? h(React.Fragment, null,
+        h("div", { className: "trend-grid" },
+          h(TrendBox, { label: "주요 키워드", value: topics.length ? topics.slice(0, 4).join(" · ") : "분석 대기", note: "과제명·요약 기준" }),
+          h(TrendBox, { label: "주요 수행/관리기관", value: agencies.length ? agencies.slice(0, 3).join(" · ") : "분석 대기", note: "기관명 빈도 기준" }),
+          h(TrendBox, { label: "전략 해석", value: "공고 이후 실제 선정·수행 과제 흐름을 보며 관심 분야의 지속성을 판단", note: "경영기획 검토용" })
+        ),
+        h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, recent.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
+          h("p", { className: "trend-title" }, item.title || "제목 없음"),
+          h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date].filter(Boolean).join(" · ")),
+          item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
+        ); }))
+      ) : h("div", { className: "empty compact" }, "NTIS 과제 데이터는 공고와 분리해 이곳에 표시할 예정입니다. 로컬 수집기로 업로드하면 정부 R&D 방향성 분석 화면으로 쌓입니다.")
+    ));
+  }
+
+  function TrendBox(props) {
+    return h("article", { className: "trend-box" }, h("span", null, props.label), h("strong", null, props.value), h("p", null, props.note));
   }
 
   function ComingSoon(props) {
@@ -477,6 +516,29 @@ export const APP_JS = String.raw`
       var text = [item.company, item.company_name, item.title, item.report_nm, item.description, item.ai_summary, item.summary].join(" ").toLowerCase();
       return companyOk && (!needle || text.indexOf(needle) >= 0);
     });
+  }
+
+  function topGrantKeywords(items) {
+    var words = {};
+    items.forEach(function (item) {
+      [item.title, item.summary, item.keywords, item.category].join(" ").split(/[\s,·/()\[\]{}<>]+/).forEach(function (word) {
+        var value = String(word || "").trim();
+        if (value.length < 2) return;
+        if (/^(사업|과제|지원|개발|연구|기반|기술|및|위한|통한|활용)$/.test(value)) return;
+        words[value] = (words[value] || 0) + 1;
+      });
+    });
+    return Object.keys(words).sort(function (a, b) { return words[b] - words[a] || a.localeCompare(b); }).slice(0, 8);
+  }
+
+  function topGrantValues(items, field) {
+    var counts = {};
+    items.forEach(function (item) {
+      var value = String(item[field] || "").trim();
+      if (!value) return;
+      counts[value] = (counts[value] || 0) + 1;
+    });
+    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); }).slice(0, 6);
   }
 
   function filterGrants(items, options) {
