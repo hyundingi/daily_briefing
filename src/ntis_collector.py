@@ -6,6 +6,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from math import ceil
 from typing import Any
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
@@ -62,6 +63,14 @@ def page_limit() -> int:
     raw = env_value("NTIS_PAGE_LIMIT", "100")
     try:
         return max(10, min(int(raw), 100))
+    except ValueError:
+        return 100
+
+
+def upload_batch_size() -> int:
+    raw = env_value("NTIS_UPLOAD_BATCH_SIZE", "100")
+    try:
+        return max(20, min(int(raw), 200))
     except ValueError:
         return 100
 
@@ -206,18 +215,37 @@ def collect_ntis() -> list[dict[str, str]]:
     return collected
 
 
-def upload_projects(projects: list[dict[str, str]]) -> dict[str, Any]:
+def upload_projects(projects: list[dict[str, str]], batch_no: int = 1, batch_total: int = 1) -> dict[str, Any]:
     headers = {"x-update-password": worker_password(), "Content-Type": "application/json"}
     add_cloudflare_access_headers(headers)
     payload = {
         "source": "NTIS",
         "imported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "batch_no": batch_no,
+        "batch_total": batch_total,
         "projects": projects,
     }
     response = requests.post(worker_base_url() + "/api/grants/import", headers=headers, json=payload, timeout=180)
     if not response.ok:
-        raise RuntimeError(f"Worker 업로드 실패: {response.status_code} {response.text[:500]}")
+        raise RuntimeError(f"Worker 업로드 실패({batch_no}/{batch_total}): {response.status_code} {response.text[:500]}")
     return response.json()
+
+
+def upload_projects_in_batches(projects: list[dict[str, str]]) -> dict[str, int]:
+    size = upload_batch_size()
+    total_batches = ceil(len(projects) / size)
+    totals = {"received": 0, "saved": 0, "added": 0}
+    for index in range(total_batches):
+        chunk = projects[index * size : (index + 1) * size]
+        result = upload_projects(chunk, index + 1, total_batches)
+        totals["received"] += int(result.get("received", 0) or 0)
+        totals["saved"] += int(result.get("saved", 0) or 0)
+        totals["added"] += int(result.get("added", 0) or 0)
+        print(
+            f"[Worker] 배치 {index + 1}/{total_batches} 업로드 완료: "
+            f"수신 {result.get('received', 0)}건 / 저장 {result.get('saved', 0)}건 / 신규 {result.get('added', 0)}건"
+        )
+    return totals
 
 
 def main() -> None:
@@ -225,9 +253,8 @@ def main() -> None:
     print(f"[NTIS] 총 수집 {len(projects)}건")
     if not projects:
         return
-    result = upload_projects(projects)
-    print(f"[Worker] NTIS 업로드 완료: 수신 {result.get('received', 0)}건 / 저장 {result.get('saved', 0)}건 / 신규 {result.get('added', 0)}건")
-
+    result = upload_projects_in_batches(projects)
+    print(f"[Worker] NTIS 업로드 전체 완료: 수신 {result.get('received', 0)}건 / 저장 {result.get('saved', 0)}건 / 신규 {result.get('added', 0)}건")
 
 if __name__ == "__main__":
     try:
@@ -235,3 +262,5 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"[오류] {exc}", file=sys.stderr)
         raise
+
+

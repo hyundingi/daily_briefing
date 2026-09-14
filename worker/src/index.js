@@ -301,7 +301,7 @@ async function importGovernmentProjects(request, env) {
   const fresh = await filterNewRows(env.DB, "government_projects", projects, governmentProjectKey);
   const statements = projects.map((item) => governmentProjectStatement(env, item, importedAt));
   if (statements.length) await env.DB.batch(statements);
-  return jsonResponse({ ok: true, source, received: rawProjects.length, saved: projects.length, added: fresh.length, projects: await governmentProjectsFromD1(env) });
+  return jsonResponse({ ok: true, source, received: rawProjects.length, saved: projects.length, added: fresh.length, batch_no: body.batch_no || null, batch_total: body.batch_total || null });
 }
 
 function normalizeImportedGovernmentProject(item, fallbackSource) {
@@ -2148,6 +2148,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 
