@@ -767,6 +767,10 @@ function projectLink(item) {
     return unique(text.replace(/[0-9]+(?:조|억|만|개|건|%)?/g, " ").replace(/[^0-9A-Za-z가-힣]/g, " ").split(/\s+/).map(function (word) { return word.trim(); }).filter(function (word) { return word.length >= 2 && !stop.has(word); })).slice(0, 8);
   }
 
+
+  function unique(values) {
+    return Array.from(new Set(values || []));
+  }
   function tokenOverlap(a, b) {
     var set = new Set(b || []);
     return (a || []).filter(function (token) { return set.has(token); }).length;
@@ -1071,6 +1075,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
