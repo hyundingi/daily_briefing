@@ -747,7 +747,7 @@ function projectLink(item) {
       var tokens = newsTokens(item.title || "");
       var matched = null;
       for (var i = 0; i < groups.length; i += 1) {
-        if ((groups[i].company || "") === (item.company || item.company_name || "") && tokenOverlap(tokens, groups[i].tokens) >= 2) { matched = groups[i]; break; }
+        if ((groups[i].company || "") === (item.company || item.company_name || "") && isSimilarNewsTokens(tokens, groups[i].tokens)) { matched = groups[i]; break; }
       }
       if (!matched) groups.push({ company: item.company || item.company_name || "", tokens: tokens, items: [item] });
       else matched.items.push(item);
@@ -771,6 +771,13 @@ function projectLink(item) {
   function unique(values) {
     return Array.from(new Set(values || []));
   }
+
+  function isSimilarNewsTokens(a, b) {
+    var overlap = tokenOverlap(a, b);
+    if (overlap < 2) return false;
+    var base = Math.max(1, Math.min((a || []).length, (b || []).length));
+    return overlap / base >= 0.55 || overlap >= 3;
+  }
   function tokenOverlap(a, b) {
     var set = new Set(b || []);
     return (a || []).filter(function (token) { return set.has(token); }).length;
@@ -783,6 +790,11 @@ function projectLink(item) {
     return 1;
   }
 
+
+  function companyIndex(name) {
+    var index = COMPANIES.indexOf(name || "");
+    return index >= 0 ? index : 999;
+  }
   function formatDateOnly(value) {
     return String(value || "").slice(0, 10);
   }
@@ -1075,6 +1087,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
