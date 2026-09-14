@@ -152,7 +152,7 @@ export const APP_JS = String.raw`
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
         !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: disclosureCompany, setCompany: setDisclosureCompany, query: disclosureQuery, setQuery: setDisclosureQuery }) : null,
-        !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
+        !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, rawItems: news, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
         !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
@@ -323,16 +323,17 @@ export const APP_JS = String.raw`
 
   function DataPage(props) {
     var isNews = props.type === "news";
+    var displayItems = isNews ? prepareNewsItems(filterItems(props.rawItems || props.items || [], props.company, props.query), { grouped: props.grouped, sort: props.sort }) : (props.items || []);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: props.items.length + "건" }),
+      h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: displayItems.length + "건" }),
       h("div", { className: isNews ? "content-toolbar news-toolbar" : "content-toolbar" },
         h("select", { className: "field", value: props.company, onChange: function (event) { props.setCompany(event.target.value); } }, COMPANIES.map(function (name) { return h("option", { key: name, value: name }, name); })),
         isNews ? h("select", { className: "field", value: props.sort || "latest", onChange: function (event) { props.setSort(event.target.value); } }, [h("option", { value: "latest" }, "최신순"), h("option", { value: "company" }, "회사순")]) : null,
         h("input", { className: "field", value: props.query, onChange: function (event) { props.setQuery(event.target.value); }, placeholder: isNews ? "제목, 내용, AI 요약 검색" : "회사명, 제목, 내용 검색" }),
         isNews ? h("label", { className: "toggle-field" }, h("input", { type: "checkbox", checked: !!props.grouped, onChange: function (event) { props.setGrouped(event.target.checked); } }), h("span", null, "유사 뉴스 묶기")) : null
       ),
-      isNews ? h("div", { className: "news-grid" }, props.items.length ? props.items.map(function (item) { return h(NewsCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
-        h("div", { className: "data-list" }, props.items.length ? props.items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))
+      isNews ? h("div", { className: "news-grid" }, displayItems.length ? displayItems.map(function (item) { return h(NewsCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
+        h("div", { className: "data-list" }, displayItems.length ? displayItems.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))
     ));
   }
 
@@ -801,7 +802,9 @@ function projectLink(item) {
   function filterItems(items, company, query) {
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
-      var companyOk = company === "전체" || (item.company || item.company_name) === company;
+      var selectedCompany = String(company || "전체").trim();
+      var itemCompany = String(item.company || item.company_name || "").trim();
+      var companyOk = selectedCompany === "전체" || itemCompany === selectedCompany;
       var text = [item.company, item.company_name, item.title, item.report_nm, item.description, item.original_text, item.ai_summary, item.summary, item.ai_briefing, item.media, item.source].join(" ").toLowerCase();
       return companyOk && (!needle || text.indexOf(needle) >= 0);
     });
@@ -1087,6 +1090,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
