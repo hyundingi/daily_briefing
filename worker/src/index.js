@@ -102,6 +102,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/financials/refresh") return await refreshFinancialMetrics(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/refresh") return await refreshGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/import") return await importGovernmentProjects(request, env);
+      if (request.method === "POST" && url.pathname === "/api/rd/strategy") return await rdStrategyAnalysis(request, env);
       if (request.method === "POST" && url.pathname === "/api/summarize-missing") return await summarizeMissing(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/import-archive") return await importNewsletterArchive(request, env);
       if (request.method === "POST" && url.pathname === "/api/newsletter/generate") return await generateNewsletter(request, env);
@@ -302,6 +303,50 @@ async function importGovernmentProjects(request, env) {
   const statements = projects.map((item) => governmentProjectStatement(env, item, importedAt));
   if (statements.length) await env.DB.batch(statements);
   return jsonResponse({ ok: true, source, received: rawProjects.length, saved: projects.length, added: fresh.length, batch_no: body.batch_no || null, batch_total: body.batch_total || null });
+}
+
+async function rdStrategyAnalysis(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.GEMINI_API_KEY) return jsonResponse({ ok: false, error: "GEMINI_API_KEY가 설정되어 있지 않습니다." }, 503);
+  const body = await request.json().catch(() => ({}));
+  const prompt = {
+    role: "경영기획팀 R&D 전략 담당자",
+    instruction: [
+      "NTIS 과제 집계 데이터를 보고 경영기획팀 실무자가 바로 쓸 수 있는 전략 코멘트를 한국어로 작성합니다.",
+      "단순 순위 나열이 아니라 왜 봐야 하는지, 어떤 기관/분야를 우선 모니터링해야 하는지, 공고 탭에서 무엇을 이어서 확인해야 하는지 씁니다.",
+      "과장하지 말고 제공된 데이터 안에서만 판단합니다.",
+      "4개 bullet 이내, 각 bullet은 1~2문장으로 작성합니다."
+    ],
+    filter: {
+      keyword: clean(body.keyword || "전체"),
+      agency: clean(body.agency || "전체"),
+      year: clean(body.year || "전체"),
+      total_count: Number(body.total_count || 0),
+      filtered_count: Number(body.filtered_count || 0),
+    },
+    trends: Array.isArray(body.trends) ? body.trends.slice(0, 8) : [],
+    agencies: Array.isArray(body.agencies) ? body.agencies.slice(0, 8) : [],
+    competitors: Array.isArray(body.competitors) ? body.competitors.slice(0, 8) : [],
+    funds: Array.isArray(body.funds) ? body.funds.slice(0, 5) : [],
+    samples: Array.isArray(body.samples) ? body.samples.slice(0, 10) : [],
+  };
+  const diagnostics = [];
+  const models = unique([env.GEMINI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash-lite"].filter(Boolean));
+  for (const model of models) {
+    const response = await fetch(GEMINI_API_URL.replace("{model}", model), {
+      method: "POST",
+      headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: JSON.stringify(prompt) }] }] }),
+    });
+    if (!response.ok) {
+      diagnostics.push({ model, status: response.status, reason: geminiErrorReason(await response.text()) });
+      continue;
+    }
+    const payload = await response.json();
+    const analysis = clean(extractGeminiText(payload));
+    if (analysis) return jsonResponse({ ok: true, analysis, model });
+  }
+  return jsonResponse({ ok: false, error: "Gemini 분석 결과를 생성하지 못했습니다.", diagnostics }, 502);
 }
 
 function normalizeImportedGovernmentProject(item, fallbackSource) {

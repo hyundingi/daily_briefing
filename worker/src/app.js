@@ -419,25 +419,67 @@ export const APP_JS = String.raw`
     var agencyState = React.useState("전체");
     var agencyFilter = agencyState[0];
     var setAgencyFilter = agencyState[1];
+    var yearState = React.useState("전체");
+    var yearFilter = yearState[0];
+    var setYearFilter = yearState[1];
     var searchState = React.useState("");
     var search = searchState[0];
     var setSearch = searchState[1];
+    var pageState = React.useState(1);
+    var page = pageState[0];
+    var setPage = pageState[1];
+    var aiState = React.useState({ loading: false, text: "", error: "" });
+    var aiStrategy = aiState[0];
+    var setAiStrategy = aiState[1];
     var keywordOptions = ["전체"].concat(rdAvailableKeywords(ntisItems));
     var agencyOptions = ["전체"].concat(countRows(ntisItems, function (item) { return item.agency || "기관 미확인"; }).slice(0, 30).map(function (row) { return row.name; }));
-    var filtered = filterRdItems(ntisItems, { keyword: focusKeyword, agency: agencyFilter, query: search });
+    var yearOptions = ["전체"].concat(countRows(ntisItems, function (item) { return rdYear(item); }).map(function (row) { return row.name; }).filter(function (year) { return /^20\d{2}$/.test(year); }).sort().reverse());
+    var filtered = filterRdItems(ntisItems, { keyword: focusKeyword, agency: agencyFilter, year: yearFilter, query: search });
     var stats = rdTrendStats(filtered);
-    var years = recentYearLabels(ntisItems, 5);
+    var years = yearFilter === "전체" ? recentYearLabels(ntisItems, 5) : [yearFilter];
     var trendRows = keywordYearTrend(ntisItems, focusKeyword, years).slice(0, props && props.expanded ? 8 : 5);
     var competitorRows = competitorSignals(filtered).slice(0, 8);
-    var projectRows = filtered.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 30 : 6);
+    var sortedProjects = filtered.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); });
+    var pageSize = props && props.expanded ? 12 : 6;
+    var totalPages = Math.max(1, Math.ceil(sortedProjects.length / pageSize));
+    var safePage = Math.min(page, totalPages);
+    if (safePage !== page) setTimeout(function () { setPage(safePage); }, 0);
+    var projectRows = sortedProjects.slice((safePage - 1) * pageSize, safePage * pageSize);
     var insights = strategicRdInsights({ total: ntisItems.length, filtered: filtered, stats: stats, keyword: focusKeyword, agency: agencyFilter, competitors: competitorRows, years: years, trendRows: trendRows });
+    function resetPage(setter) {
+      return function (event) { setter(event.target.value); setPage(1); setAiStrategy({ loading: false, text: "", error: "" }); };
+    }
+    function requestAiStrategy() {
+      var password = window.prompt("관리자 비밀번호를 입력해주세요.");
+      if (!password) return;
+      setAiStrategy({ loading: true, text: "", error: "" });
+      fetch("/api/rd/strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Update-Password": password },
+        body: JSON.stringify({
+          keyword: focusKeyword,
+          agency: agencyFilter,
+          year: yearFilter,
+          total_count: ntisItems.length,
+          filtered_count: filtered.length,
+          trends: trendRows.slice(0, 8),
+          agencies: stats.agencies.slice(0, 8),
+          competitors: competitorRows.slice(0, 8),
+          funds: stats.funds.slice(0, 5),
+          samples: sortedProjects.slice(0, 10).map(function (item) { return { title: item.title, agency: item.agency, category: item.category, year: rdYear(item), summary: cleanSnippet(item.summary || "").slice(0, 180) }; })
+        })
+      }).then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
+        .then(function (result) { setAiStrategy(result.ok ? { loading: false, text: result.json.analysis || "", error: "" } : { loading: false, text: "", error: result.json.error || "Gemini 분석에 실패했습니다." }); })
+        .catch(function (error) { setAiStrategy({ loading: false, text: "", error: error.message || String(error) }); });
+    }
     return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제를 공고와 분리해 정부가 실제로 돈을 쓰는 연구 분야·기관·경쟁사 신호를 봅니다.", pill: ntisItems.length ? formatNumber(ntisItems.length) + "건" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "분석 보기")] : null }),
       ntisItems.length ? h(React.Fragment, null,
         props && props.expanded ? h("div", { className: "rd-filterbar" },
-          h("select", { className: "field", value: focusKeyword, onChange: function (event) { setFocusKeyword(event.target.value); } }, keywordOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 관심분야" : name); })),
-          h("select", { className: "field", value: agencyFilter, onChange: function (event) { setAgencyFilter(event.target.value); } }, agencyOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 기관" : name); })),
-          h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "과제명, 기관, 키워드 검색" }),
+          h("select", { className: "field", value: focusKeyword, onChange: resetPage(setFocusKeyword) }, keywordOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 관심분야" : name); })),
+          h("select", { className: "field", value: agencyFilter, onChange: resetPage(setAgencyFilter) }, agencyOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 기관" : name); })),
+          h("select", { className: "field", value: yearFilter, onChange: resetPage(setYearFilter) }, yearOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 연도" : name); })),
+          h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); setPage(1); }, placeholder: "과제명, 기관, 키워드 검색" }),
           h("span", { className: "result-count" }, "분석 대상 " + formatNumber(filtered.length) + "건")
         ) : null,
         h("div", { className: "trend-grid" },
@@ -446,22 +488,29 @@ export const APP_JS = String.raw`
           h(TrendBox, { label: "경쟁사/협력사 신호", value: competitorRows.length ? competitorRows[0].name : "없음", note: competitorRows.length ? formatNumber(competitorRows[0].value) + "건 언급" : "현재 필터 기준 직접 언급 없음" })
         ),
         h("div", { className: "strategy-box impact" },
-          h("p", { className: "strategy-title" }, "전략적으로 볼 점"),
-          h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); }))
+          h("div", { className: "strategy-head" }, h("p", { className: "strategy-title" }, "전략적으로 볼 점"), h("button", { className: "ghost-button", disabled: aiStrategy.loading, onClick: requestAiStrategy }, aiStrategy.loading ? "Gemini 분석 중…" : "Gemini로 분석")),
+          aiStrategy.text ? h("div", { className: "ai-strategy" }, aiStrategy.text.split(/
++/).filter(Boolean).map(function (line, index) { return h("p", { key: index }, line.replace(/^[-•]\s*/, "")); })) : h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); })),
+          aiStrategy.error ? h("p", { className: "mini-text error-text" }, aiStrategy.error) : null
         ),
         h("div", { className: "rd-analysis-grid focused" },
-          h(TrendMatrix, { title: "최근 5년 관심분야 흐름", rows: trendRows, years: years }),
+          h(TrendMatrix, { title: yearFilter === "전체" ? "최근 5년 관심분야 흐름" : yearFilter + "년 관심분야 분포", rows: trendRows, years: years }),
           h(RankList, { title: "우선 모니터링 기관", rows: stats.agencies.slice(0, 8), unit: "건" }),
           h(RankList, { title: "경쟁사·협력사 과제 신호", rows: competitorRows, unit: "건" }),
           h(RankList, { title: "정부 R&D 투자 규모 상위", rows: stats.funds.slice(0, 6), unit: "원", money: true })
         ),
         h("div", { className: "project-explorer" },
-          h("div", { className: "project-explorer-head" }, h("h3", null, "과제 탐색"), h("span", null, "필터 결과 중 최근 " + projectRows.length + "건 표시")),
+          h("div", { className: "project-explorer-head" }, h("h3", null, "과제 탐색"), h("span", null, "전체 " + formatNumber(sortedProjects.length) + "건 중 " + (sortedProjects.length ? ((safePage - 1) * pageSize + 1) + "-" + Math.min(sortedProjects.length, safePage * pageSize) : "0") + "건 표시")),
           h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, projectRows.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
             h("p", { className: "trend-title" }, item.title || "제목 없음"),
             h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date, item.budget ? formatMoney(parseMoney(item.budget)) : ""].filter(Boolean).join(" · ")),
             item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
-          ); }))
+          ); })),
+          props && props.expanded && totalPages > 1 ? h("div", { className: "pagination" },
+            h("button", { className: "page-button", disabled: safePage <= 1, onClick: function () { setPage(Math.max(1, safePage - 1)); } }, "이전"),
+            paginationNumbers(safePage, totalPages).map(function (pageNo, index) { return pageNo === "..." ? h("span", { className: "page-ellipsis", key: "rd-ellipsis-" + index }, "...") : h("button", { className: pageNo === safePage ? "page-button active" : "page-button", key: pageNo, onClick: function () { setPage(pageNo); } }, pageNo); }),
+            h("button", { className: "page-button", disabled: safePage >= totalPages, onClick: function () { setPage(Math.min(totalPages, safePage + 1)); } }, "다음")
+          ) : null
         )
       ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. 로컬 수집기를 실행하면 관심분야 흐름, 반복기관, 경쟁사 신호, 투자 규모가 이곳에 표시됩니다.")
     ));
@@ -591,8 +640,9 @@ export const APP_JS = String.raw`
       var text = rdText(item);
       var keywordOk = keyword === "전체" || text.toLowerCase().indexOf(keyword.toLowerCase()) >= 0;
       var agencyOk = agency === "전체" || String(item.agency || "") === agency;
+      var yearOk = !options.year || options.year === "전체" || rdYear(item) === options.year;
       var queryOk = !needle || text.toLowerCase().indexOf(needle) >= 0;
-      return keywordOk && agencyOk && queryOk;
+      return keywordOk && agencyOk && yearOk && queryOk;
     });
   }
 
@@ -600,8 +650,24 @@ export const APP_JS = String.raw`
     return {
       keywords: rdKeywordRows(items),
       agencies: countRows(items, function (item) { return item.agency || "기관 미확인"; }),
-      funds: items.map(function (item) { return { name: item.title || "제목 없음", value: parseMoney(item.budget), item: item }; }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value; })
+      funds: fundRows(items)
     };
+  }
+
+
+  function fundRows(items) {
+    var byTitle = {};
+    items.forEach(function (item) {
+      var value = parseMoney(item.budget);
+      if (value <= 0) return;
+      var title = normalizeText(item.title || "제목 없음");
+      if (!byTitle[title] || byTitle[title].value < value) byTitle[title] = { name: item.title || "제목 없음", value: value, item: item };
+    });
+    return Object.keys(byTitle).map(function (key) { return byTitle[key]; }).sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name, "ko"); });
+  }
+
+  function normalizeText(value) {
+    return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
   }
 
   function rdAvailableKeywords(items) {
@@ -714,13 +780,15 @@ export const APP_JS = String.raw`
   }
 
   function parseMoney(value) {
-    var text = String(value || "").replace(/,/g, "");
+    var text = String(value || "").replace(/,/g, "").trim();
+    if (!text || /기관|연도|기간|명$/.test(text)) return 0;
     var match = text.match(/-?\d+(?:\.\d+)?/);
     if (!match) return 0;
     var amount = Number(match[0]);
-    if (!Number.isFinite(amount)) return 0;
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
     if (/억/.test(text)) amount *= 100000000;
     else if (/만/.test(text)) amount *= 10000;
+    if (amount < 1000000) return 0;
     return amount;
   }
 
