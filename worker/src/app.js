@@ -22,7 +22,6 @@ export const APP_JS = String.raw`
     ["cash", "₩", "자금현황"],
     ["schedule", "◇", "일정"],
     ["grants", "✦", "국책과제"],
-    ["rd_trends", "◎", "R&D 동향"],
     ["disclosures", "□", "공시"],
     ["news", "◌", "뉴스"]
   ];
@@ -148,7 +147,6 @@ export const APP_JS = String.raw`
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
         !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
         !loading && active === "grants" ? h(GrantsPage, { grants: grants }) : null,
-        !loading && active === "rd_trends" ? h(RdTrendPage, { grants: grants }) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
           h("button", { className: "ghost-button", onClick: summarizeMissing }, "AI 요약 채우기"),
           h("button", { className: "ghost-button", onClick: refreshGrants }, "국책과제 수집"),
@@ -195,7 +193,7 @@ export const APP_JS = String.raw`
       ),
       h("section", { className: "dashboard-grid" },
         h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials }), h(ProfitPanel, null), h(CashPanel, null)),
-        h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(RdTrendPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
+        h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
   }
@@ -315,6 +313,26 @@ export const APP_JS = String.raw`
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: props.items.length + "건" }), h("div", { className: "content-toolbar" }, h("select", { className: "field", value: props.company, onChange: function (event) { props.setCompany(event.target.value); } }, COMPANIES.map(function (name) { return h("option", { key: name, value: name }, name); })), h("input", { className: "field", value: props.query, onChange: function (event) { props.setQuery(event.target.value); }, placeholder: "회사명, 제목, 내용 검색" })), h("div", { className: "data-list" }, props.items.length ? props.items.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))));
   }
 
+
+  function NewsCard(props) {
+    var item = props.item;
+    var company = item.company || item.company_name || "기타";
+    var url = item.url || item.link || "#";
+    var relatedCount = Math.max(0, Number(item.related_count || 0));
+    return h("article", { className: "news-card" },
+      h("div", { className: "news-card-top" },
+        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company),
+        item.category ? h("span", { className: "news-category" }, item.category) : null
+      ),
+      h("a", { className: "news-title", href: url, target: "_blank", rel: "noreferrer" }, item.title || "제목 없음"),
+      h("div", { className: "item-meta" }, [item.media || item.source || "", formatDateOnly(item.published_at || item.date || item.pub_date || "")].filter(Boolean).join(" · ")),
+      h("p", { className: "news-summary" }, cleanSnippet(item.ai_summary || item.summary || item.description || item.original_text || "주요 내용이 아직 정리되지 않았습니다.")),
+      h("div", { className: "news-card-actions" },
+        relatedCount ? h("span", { className: "related-chip" }, "관련 기사 " + relatedCount + "건") : h("span", { className: "related-chip muted" }, "대표 기사"),
+        h("a", { className: "source-link", href: url, target: "_blank", rel: "noreferrer" }, "원문 보기")
+      )
+    );
+  }
   function ArchivePage(props) {
     function openArchive(date) {
       fetch("/api/archive/" + encodeURIComponent(date), { cache: "no-store" })
@@ -688,11 +706,64 @@ function projectLink(item) {
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
     return start.getTime() <= now.getTime() && end.getTime() >= now.getTime();
   }
+
+  function prepareNewsItems(items, options) {
+    var rows = (items || []).slice();
+    if (options && options.grouped) rows = representativeNews(rows);
+    if (options && options.sort === "company") {
+      rows.sort(function (a, b) { return companyIndex(a.company || a.company_name) - companyIndex(b.company || b.company_name) || dateValue(b) - dateValue(a); });
+    } else {
+      rows.sort(function (a, b) { return dateValue(b) - dateValue(a); });
+    }
+    return rows;
+  }
+
+  function representativeNews(items) {
+    var groups = [];
+    items.forEach(function (item) {
+      var tokens = newsTokens(item.title || "");
+      var matched = null;
+      for (var i = 0; i < groups.length; i += 1) {
+        if ((groups[i].company || "") === (item.company || item.company_name || "") && tokenOverlap(tokens, groups[i].tokens) >= 2) { matched = groups[i]; break; }
+      }
+      if (!matched) groups.push({ company: item.company || item.company_name || "", tokens: tokens, items: [item] });
+      else matched.items.push(item);
+    });
+    return groups.map(function (group) {
+      var sorted = group.items.slice().sort(function (a, b) { return sourcePriority(b) - sourcePriority(a) || dateValue(b) - dateValue(a); });
+      var head = Object.assign({}, sorted[0]);
+      head.related_count = group.items.length - 1;
+      return head;
+    });
+  }
+
+  function newsTokens(title) {
+    var stop = new Set(["단독", "종합", "속보", "관련", "뉴스", "기자", "제약", "바이오", "헬스", "회사", "오늘", "이번", "통해", "위해", "대한", "으로", "에서", "한다", "개최", "진행", "대상"]);
+    var text = String(title || "");
+    COMPANIES.slice(1).forEach(function (name) { text = text.replace(new RegExp(name, "g"), " "); });
+    return unique(text.replace(/[0-9]+(?:조|억|만|개|건|%)?/g, " ").replace(/[^0-9A-Za-z가-힣]/g, " ").split(/\s+/).map(function (word) { return word.trim(); }).filter(function (word) { return word.length >= 2 && !stop.has(word); })).slice(0, 8);
+  }
+
+  function tokenOverlap(a, b) {
+    var set = new Set(b || []);
+    return (a || []).filter(function (token) { return set.has(token); }).length;
+  }
+
+  function sourcePriority(item) {
+    var media = String(item.media || item.source || "");
+    var preferred = ["약업신문", "데일리팜", "의학신문", "메디파나", "히트뉴스", "바이오스펙테이터", "청년의사", "메디칼타임즈", "팜뉴스", "한국경제", "매일경제", "서울경제", "이데일리", "머니투데이", "연합뉴스"];
+    for (var i = 0; i < preferred.length; i += 1) if (media.indexOf(preferred[i]) >= 0) return 100 - i;
+    return 1;
+  }
+
+  function formatDateOnly(value) {
+    return String(value || "").slice(0, 10);
+  }
   function filterItems(items, company, query) {
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
       var companyOk = company === "전체" || (item.company || item.company_name) === company;
-      var text = [item.company, item.company_name, item.title, item.report_nm, item.description, item.ai_summary, item.summary].join(" ").toLowerCase();
+      var text = [item.company, item.company_name, item.title, item.report_nm, item.description, item.original_text, item.ai_summary, item.summary, item.ai_briefing, item.media, item.source].join(" ").toLowerCase();
       return companyOk && (!needle || text.indexOf(needle) >= 0);
     });
   }
@@ -977,6 +1048,9 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
+
 
 
 

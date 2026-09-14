@@ -203,6 +203,7 @@ button { border: 0; cursor: pointer; }
 .cash-grid strong { color: var(--primary-900); font-size: 24px; letter-spacing: -0.04em; }
 
 .intel-list, .data-list { display: grid; gap: 12px; }
+.news-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .intel-card, .data-card {
   padding: 16px;
   border-radius: 22px;
@@ -211,6 +212,17 @@ button { border: 0; cursor: pointer; }
 }
 .company-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 900; }
 .item-title { display: block; margin: 10px 0 8px; font-size: 15px; line-height: 1.45; font-weight: 950; letter-spacing: -0.025em; }
+.news-card { min-width: 0; padding: 16px; border-radius: 22px; background: rgba(255,255,255,0.76); border: 1px solid rgba(234,223,221,0.82); box-shadow: 0 14px 32px rgba(91,73,70,0.06); }
+.news-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.news-category { padding: 5px 8px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 11px; font-weight: 900; }
+.news-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 42px; color: var(--text); text-decoration: none; font-size: 15px; line-height: 1.42; font-weight: 950; letter-spacing: -0.025em; }
+.news-title:hover { color: var(--primary-800); text-decoration: underline; }
+.news-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 63px; margin: 10px 0 12px; color: #5f5655; font-size: 13px; line-height: 1.6; }
+.news-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.related-chip { color: var(--primary-900); font-size: 12px; font-weight: 900; }
+.related-chip.muted { color: var(--muted); }
+.source-link { color: var(--primary-900); font-size: 12px; font-weight: 950; text-decoration: none; }
+.source-link:hover { text-decoration: underline; }
 .item-meta { color: var(--muted); font-size: 12px; }
 .ai-box { margin-top: 10px; padding: 12px; border-radius: 16px; background: var(--primary-50); color: #4b4646; font-size: 13px; line-height: 1.62; }
 .ai-box p { margin: 0 0 5px; }
@@ -308,6 +320,9 @@ button { border: 0; cursor: pointer; }
 }
 
 .content-toolbar { display: grid; grid-template-columns: 180px minmax(220px, 1fr); gap: 10px; margin-bottom: 16px; }
+.content-toolbar.news-toolbar { grid-template-columns: 160px 140px minmax(220px, 1fr) auto; align-items: center; }
+.toggle-field { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.78); color: var(--primary-900); font-size: 12px; font-weight: 900; white-space: nowrap; }
+.toggle-field input { accent-color: var(--primary-800); }
 .field { width: 100%; height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.78); color: var(--ink); outline: none; }
 .field:focus { border-color: var(--primary-500); box-shadow: 0 0 0 4px rgba(230,173,170,0.3); }
 .page-section { display: none; }
@@ -342,6 +357,8 @@ button { border: 0; cursor: pointer; }
 .hidden-admin.open { display: flex; }
 
 @media (max-width: 1180px) {
+  .news-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: relative; height: auto; display: block; padding: 18px; }
   .side-note { position: static; margin-top: 14px; }
@@ -355,7 +372,7 @@ button { border: 0; cursor: pointer; }
   .topbar, .panel-head { display: block; }
   .topbar-actions { justify-content: flex-start; margin-top: 12px; }
   .updated-chip { display: inline-flex; margin-top: 12px; }
-  .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .cash-grid { grid-template-columns: 1fr; }
+  .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .content-toolbar.news-toolbar, .cash-grid, .news-grid { grid-template-columns: 1fr; }
   .grant-toolbar { align-items: stretch; }
   .grant-filter-group, .grant-search-group { width: 100%; justify-content: flex-start; margin-left: 0; }
   .grant-grid.expanded, .trend-list.expanded, .trend-grid, .rd-analysis-grid, .rd-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -364,6 +381,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr 1fr; }
 }
 `;
+
 
 
 
