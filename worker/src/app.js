@@ -413,36 +413,57 @@ export const APP_JS = String.raw`
 
   function RdTrendPanel(props) {
     var ntisItems = (props && props.grants ? props.grants : []).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
-    var stats = rdTrendStats(ntisItems);
-    var recent = ntisItems.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 8 : 3);
+    var keywordState = React.useState("전체");
+    var focusKeyword = keywordState[0];
+    var setFocusKeyword = keywordState[1];
+    var agencyState = React.useState("전체");
+    var agencyFilter = agencyState[0];
+    var setAgencyFilter = agencyState[1];
+    var searchState = React.useState("");
+    var search = searchState[0];
+    var setSearch = searchState[1];
+    var keywordOptions = ["전체"].concat(rdAvailableKeywords(ntisItems));
+    var agencyOptions = ["전체"].concat(countRows(ntisItems, function (item) { return item.agency || "기관 미확인"; }).slice(0, 30).map(function (row) { return row.name; }));
+    var filtered = filterRdItems(ntisItems, { keyword: focusKeyword, agency: agencyFilter, query: search });
+    var stats = rdTrendStats(filtered);
+    var years = recentYearLabels(ntisItems, 5);
+    var trendRows = keywordYearTrend(ntisItems, focusKeyword, years).slice(0, props && props.expanded ? 8 : 5);
+    var competitorRows = competitorSignals(filtered).slice(0, 8);
+    var projectRows = filtered.slice().sort(function (a, b) { return String(b.announcement_date || b.first_seen_at || "").localeCompare(String(a.announcement_date || a.first_seen_at || "")); }).slice(0, props && props.expanded ? 30 : 6);
+    var insights = strategicRdInsights({ total: ntisItems.length, filtered: filtered, stats: stats, keyword: focusKeyword, agency: agencyFilter, competitors: competitorRows, years: years, trendRows: trendRows });
     return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제 정보를 집계해 정부 R&D 투자 방향, 연구 분야, 수행기관 흐름을 봅니다.", pill: ntisItems.length ? ntisItems.length + "건 분석" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "분석 보기")] : null }),
+      h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제를 공고와 분리해 정부가 실제로 돈을 쓰는 연구 분야·기관·경쟁사 신호를 봅니다.", pill: ntisItems.length ? formatNumber(ntisItems.length) + "건" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "분석 보기")] : null }),
       ntisItems.length ? h(React.Fragment, null,
+        props && props.expanded ? h("div", { className: "rd-filterbar" },
+          h("select", { className: "field", value: focusKeyword, onChange: function (event) { setFocusKeyword(event.target.value); } }, keywordOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 관심분야" : name); })),
+          h("select", { className: "field", value: agencyFilter, onChange: function (event) { setAgencyFilter(event.target.value); } }, agencyOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 기관" : name); })),
+          h("input", { className: "field", value: search, onChange: function (event) { setSearch(event.target.value); }, placeholder: "과제명, 기관, 키워드 검색" }),
+          h("span", { className: "result-count" }, "분석 대상 " + formatNumber(filtered.length) + "건")
+        ) : null,
         h("div", { className: "trend-grid" },
-          h(TrendBox, { label: "분석 과제", value: formatNumber(ntisItems.length) + "건", note: "NTIS 수집 데이터 기준" }),
-          h(TrendBox, { label: "상위 키워드", value: stats.keywords.length ? stats.keywords.slice(0, 3).map(function (row) { return row.name; }).join(" · ") : "분석 대기", note: "과제명·요약 빈도 기준" }),
-          h(TrendBox, { label: "주요 기관", value: stats.agencies.length ? stats.agencies.slice(0, 2).map(function (row) { return row.name; }).join(" · ") : "분석 대기", note: "관리/수행기관 빈도 기준" })
+          h(TrendBox, { label: "현재 분석 대상", value: formatNumber(filtered.length) + "건", note: focusKeyword === "전체" ? "전체 NTIS 과제" : focusKeyword + " 관련 과제" }),
+          h(TrendBox, { label: "반복 등장 기관", value: stats.agencies.length ? stats.agencies[0].name : "분석 대기", note: stats.agencies.length ? formatNumber(stats.agencies[0].value) + "건 반복" : "기관 데이터 없음" }),
+          h(TrendBox, { label: "경쟁사/협력사 신호", value: competitorRows.length ? competitorRows[0].name : "없음", note: competitorRows.length ? formatNumber(competitorRows[0].value) + "건 언급" : "현재 필터 기준 직접 언급 없음" })
         ),
-        h("div", { className: "rd-analysis-grid" },
-          h(BarChart, { title: "연도별 과제 흐름", rows: stats.years, unit: "건" }),
-          h(BarChart, { title: "키워드별 비중", rows: stats.keywords.slice(0, 8), unit: "건" }),
-          h(RankList, { title: "수행·관리기관 TOP 10", rows: stats.agencies.slice(0, 10), unit: "건" }),
-          h(RankList, { title: "정부 R&D 투자 규모 상위", rows: stats.funds.slice(0, 8), unit: "원", money: true })
-        ),
-        h("div", { className: "strategy-box" },
+        h("div", { className: "strategy-box impact" },
           h("p", { className: "strategy-title" }, "전략적으로 볼 점"),
-          h("ul", null,
-            h("li", null, stats.keywords.length ? "반복 키워드는 " + stats.keywords.slice(0, 4).map(function (row) { return row.name; }).join(", ") + " 중심입니다. 해당 분야의 공고가 이어지는지 국책과제 탭에서 같이 확인하면 좋습니다." : "키워드 분석을 위해 NTIS 데이터 적재가 필요합니다."),
-            h("li", null, stats.agencies.length ? stats.agencies[0].name + " 관련 과제가 많이 보여 해당 기관 공고·사업자료를 우선 모니터링할 가치가 있습니다." : "기관별 흐름은 데이터 적재 후 표시됩니다."),
-            h("li", null, "이 화면은 신청 가능한 공고가 아니라 실제 수행/등록된 과제를 보는 곳이므로, 정부가 이미 예산을 배정한 방향성을 파악하는 용도로 쓰는 것이 적합합니다.")
-          )
+          h("ul", null, insights.map(function (line, index) { return h("li", { key: index }, line); }))
         ),
-        h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, recent.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
-          h("p", { className: "trend-title" }, item.title || "제목 없음"),
-          h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date, item.budget ? formatMoney(parseMoney(item.budget)) : ""].filter(Boolean).join(" · ")),
-          item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
-        ); }))
-      ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. 로컬 수집기를 실행하면 연도별 흐름, 키워드 분포, 기관 랭킹, 연구비 상위 과제가 이곳에 표시됩니다.")
+        h("div", { className: "rd-analysis-grid focused" },
+          h(TrendMatrix, { title: "최근 5년 관심분야 흐름", rows: trendRows, years: years }),
+          h(RankList, { title: "우선 모니터링 기관", rows: stats.agencies.slice(0, 8), unit: "건" }),
+          h(RankList, { title: "경쟁사·협력사 과제 신호", rows: competitorRows, unit: "건" }),
+          h(RankList, { title: "정부 R&D 투자 규모 상위", rows: stats.funds.slice(0, 6), unit: "원", money: true })
+        ),
+        h("div", { className: "project-explorer" },
+          h("div", { className: "project-explorer-head" }, h("h3", null, "과제 탐색"), h("span", null, "필터 결과 중 최근 " + projectRows.length + "건 표시")),
+          h("div", { className: props && props.expanded ? "trend-list expanded" : "trend-list" }, projectRows.map(function (item) { return h("article", { className: "trend-card", key: item.id || item.external_id || item.title },
+            h("p", { className: "trend-title" }, item.title || "제목 없음"),
+            h("p", { className: "mini-text" }, [item.agency, item.category, item.announcement_date, item.budget ? formatMoney(parseMoney(item.budget)) : ""].filter(Boolean).join(" · ")),
+            item.summary ? h("p", { className: "grant-summary" }, cleanSnippet(item.summary)) : null
+          ); }))
+        )
+      ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. 로컬 수집기를 실행하면 관심분야 흐름, 반복기관, 경쟁사 신호, 투자 규모가 이곳에 표시됩니다.")
     ));
   }
 
@@ -450,16 +471,20 @@ export const APP_JS = String.raw`
     return h("article", { className: "trend-box" }, h("span", null, props.label), h("strong", null, props.value), h("p", null, props.note));
   }
 
-  function BarChart(props) {
+  function TrendMatrix(props) {
     var rows = props.rows || [];
-    var max = rows.reduce(function (value, row) { return Math.max(value, row.value || 0); }, 0) || 1;
-    return h("article", { className: "analysis-card" },
+    var years = props.years || [];
+    var max = rows.reduce(function (value, row) { return Math.max(value, Math.max.apply(null, years.map(function (year) { return row.years[year] || 0; }))); }, 0) || 1;
+    return h("article", { className: "analysis-card matrix-card" },
       h("h3", null, props.title),
-      rows.length ? h("div", { className: "bar-list" }, rows.map(function (row) { return h("div", { className: "bar-row", key: row.name },
-        h("span", { className: "bar-label" }, row.name),
-        h("span", { className: "bar-track" }, h("span", { className: "bar-fill", style: { width: Math.max(5, Math.round((row.value || 0) / max * 100)) + "%" } })),
-        h("span", { className: "bar-value" }, formatNumber(row.value || 0) + (props.unit ? props.unit : ""))
-      ); })) : h("p", { className: "mini-text" }, "분석할 데이터가 없습니다.")
+      rows.length ? h("div", { className: "matrix" },
+        h("div", { className: "matrix-head" }, h("span", null, "분야"), years.map(function (year) { return h("span", { key: year }, year); }), h("span", null, "합계")),
+        rows.map(function (row) { return h("div", { className: "matrix-row", key: row.name },
+          h("span", { className: "matrix-name" }, row.name),
+          years.map(function (year) { var value = row.years[year] || 0; return h("span", { key: year, className: "matrix-cell", style: { opacity: value ? 0.35 + Math.min(0.65, value / max) : 0.22 } }, value || "-"); }),
+          h("strong", null, formatNumber(row.value))
+        ); })
+      ) : h("p", { className: "mini-text" }, "최근 5년 기준으로 표시할 데이터가 없습니다.")
     );
   }
 
@@ -467,7 +492,7 @@ export const APP_JS = String.raw`
     var rows = props.rows || [];
     return h("article", { className: "analysis-card" },
       h("h3", null, props.title),
-      rows.length ? h("ol", { className: "rank-list" }, rows.map(function (row, index) { return h("li", { key: row.name },
+      rows.length ? h("ol", { className: "rank-list compact" }, rows.map(function (row, index) { return h("li", { key: row.name },
         h("span", { className: "rank-no" }, index + 1),
         h("span", { className: "rank-name" }, row.name),
         h("strong", null, props.money ? formatMoney(row.value || 0) : formatNumber(row.value || 0) + (props.unit || ""))
@@ -556,13 +581,93 @@ export const APP_JS = String.raw`
     });
   }
 
+  var RD_KEYWORDS = ["디지털헬스", "AI", "신약", "임상", "바이오", "의료", "제약", "데이터", "플랫폼", "치료제", "진단", "의료기기", "백신", "세포", "유전자", "마이크로바이옴"];
+
+  function filterRdItems(items, options) {
+    var keyword = options.keyword || "전체";
+    var agency = options.agency || "전체";
+    var needle = String(options.query || "").toLowerCase().trim();
+    return items.filter(function (item) {
+      var text = rdText(item);
+      var keywordOk = keyword === "전체" || text.toLowerCase().indexOf(keyword.toLowerCase()) >= 0;
+      var agencyOk = agency === "전체" || String(item.agency || "") === agency;
+      var queryOk = !needle || text.toLowerCase().indexOf(needle) >= 0;
+      return keywordOk && agencyOk && queryOk;
+    });
+  }
+
   function rdTrendStats(items) {
     return {
-      years: countRows(items, function (item) { return rdYear(item); }).sort(function (a, b) { return a.name.localeCompare(b.name); }),
       keywords: rdKeywordRows(items),
       agencies: countRows(items, function (item) { return item.agency || "기관 미확인"; }),
       funds: items.map(function (item) { return { name: item.title || "제목 없음", value: parseMoney(item.budget), item: item }; }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value; })
     };
+  }
+
+  function rdAvailableKeywords(items) {
+    return RD_KEYWORDS.filter(function (keyword) { return items.some(function (item) { return rdText(item).toLowerCase().indexOf(keyword.toLowerCase()) >= 0; }); });
+  }
+
+  function keywordYearTrend(items, focusKeyword, years) {
+    var keywords = focusKeyword === "전체" ? rdAvailableKeywords(items).slice(0, 8) : [focusKeyword];
+    return keywords.map(function (keyword) {
+      var yearMap = {};
+      var total = 0;
+      years.forEach(function (year) { yearMap[year] = 0; });
+      items.forEach(function (item) {
+        if (rdText(item).toLowerCase().indexOf(keyword.toLowerCase()) < 0) return;
+        var year = rdYear(item);
+        if (yearMap[year] === undefined) return;
+        yearMap[year] += 1;
+        total += 1;
+      });
+      return { name: keyword, years: yearMap, value: total };
+    }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name, "ko"); });
+  }
+
+  function recentYearLabels(items, count) {
+    var years = countRows(items, function (item) { return rdYear(item); }).map(function (row) { return row.name; }).filter(function (year) { return /^20\d{2}$/.test(year); }).sort();
+    if (!years.length) {
+      var current = new Date().getFullYear();
+      return Array.from({ length: count }, function (_, index) { return String(current - count + 1 + index); });
+    }
+    var last = Number(years[years.length - 1]);
+    return Array.from({ length: count }, function (_, index) { return String(last - count + 1 + index); });
+  }
+
+  function competitorSignals(items) {
+    return COMPANIES.filter(function (name) { return name !== "전체"; }).map(function (name) {
+      var count = items.filter(function (item) { return rdText(item).indexOf(name) >= 0; }).length;
+      return { name: name, value: count };
+    }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name, "ko"); });
+  }
+
+  function strategicRdInsights(args) {
+    var insights = [];
+    var total = args.total || 0;
+    var filtered = args.filtered || [];
+    var stats = args.stats || { agencies: [], funds: [] };
+    var keyword = args.keyword || "전체";
+    var topTrend = (args.trendRows || [])[0];
+    if (keyword !== "전체") {
+      insights.push(keyword + " 관련 과제는 전체 NTIS 수집분 중 " + formatNumber(filtered.length) + "건입니다. 단순 공고 수가 아니라 실제 수행 과제로 잡힌 규모라, 이 분야가 일회성인지 반복 투자 영역인지 보는 기준이 됩니다.");
+    } else if (topTrend) {
+      insights.push("최근 5년 기준 반복적으로 보이는 관심분야는 " + topTrend.name + "입니다. 국책과제 탭에서는 이 키워드의 신규 공고가 실제로 이어지는지 같이 확인해야 합니다.");
+    } else {
+      insights.push("관심분야 필터를 선택하면 해당 분야가 실제 수행 과제로 얼마나 쌓였는지 볼 수 있습니다.");
+    }
+    if (stats.agencies && stats.agencies.length) {
+      insights.push(stats.agencies[0].name + "이/가 " + formatNumber(stats.agencies[0].value) + "건으로 가장 자주 등장합니다. 해당 기관의 공고·사업계획·보도자료를 우선 모니터링 후보로 두는 것이 좋습니다.");
+    }
+    if (args.competitors && args.competitors.length) {
+      insights.push("경쟁사/협력사 신호는 " + args.competitors.slice(0, 3).map(function (row) { return row.name + " " + row.value + "건"; }).join(", ") + "입니다. 해당 과제의 수행기관·공동연구 구조를 확인하면 협력/경쟁 포인트를 찾을 수 있습니다.");
+    } else {
+      insights.push("현재 필터에서는 10개 경쟁사 직접 언급이 뚜렷하지 않습니다. 경쟁사명보다 병원·대학·전문기관 중심으로 협력 네트워크를 보는 편이 유효합니다.");
+    }
+    if (stats.funds && stats.funds.length) {
+      insights.push("연구비 상위 과제는 금액 자체보다 정부가 크게 베팅한 기술축을 보여줍니다. 상위 과제명에서 반복되는 기술어를 내부 사업기회 후보로 따로 정리하는 것을 추천합니다.");
+    }
+    return insights.slice(0, 4);
   }
 
   function rdYear(item) {
@@ -572,14 +677,17 @@ export const APP_JS = String.raw`
   }
 
   function rdKeywordRows(items) {
-    var strategic = ["AI", "디지털헬스", "신약", "임상", "바이오", "의료", "제약", "데이터", "플랫폼", "치료제", "진단", "의료기기", "백신", "세포", "유전자", "마이크로바이옴"];
-    var rows = strategic.map(function (keyword) {
+    var rows = RD_KEYWORDS.map(function (keyword) {
       var needle = String(keyword || "").toLowerCase();
-      var count = items.filter(function (item) { return [item.title, item.summary, item.category, item.keywords].join(" ").toLowerCase().indexOf(needle) >= 0; }).length;
+      var count = items.filter(function (item) { return rdText(item).toLowerCase().indexOf(needle) >= 0; }).length;
       return { name: keyword, value: count };
     }).filter(function (row) { return row.value > 0; });
     if (rows.length) return rows.sort(function (a, b) { return b.value - a.value || a.name.localeCompare(b.name); });
-    return topGrantKeywords(items).map(function (name) { return { name: name, value: items.filter(function (item) { return [item.title, item.summary, item.category, item.keywords].join(" ").indexOf(name) >= 0; }).length }; });
+    return topGrantKeywords(items).map(function (name) { return { name: name, value: items.filter(function (item) { return rdText(item).indexOf(name) >= 0; }).length }; });
+  }
+
+  function rdText(item) {
+    return [item.title, item.summary, item.category, item.keywords, item.agency, item.target].join(" ");
   }
 
   function countRows(items, pick) {
@@ -603,10 +711,6 @@ export const APP_JS = String.raw`
       });
     });
     return Object.keys(words).sort(function (a, b) { return words[b] - words[a] || a.localeCompare(b); }).slice(0, 8);
-  }
-
-  function topGrantValues(items, field) {
-    return countRows(items, function (item) { return item[field]; }).map(function (row) { return row.name; }).slice(0, 6);
   }
 
   function parseMoney(value) {
