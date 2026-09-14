@@ -573,10 +573,12 @@ export const APP_JS = String.raw`
     });
   }
 
-  function projectLink(item) {
+function projectLink(item) {
     if (item && item.link) return item.link;
-    if (item && String(item.source || "").toUpperCase().indexOf("NTIS") >= 0 && item.title) {
-      return "https://www.ntis.go.kr/ThSearchResult.do?searchWord=" + encodeURIComponent(item.title);
+    if (item && String(item.source || "").toUpperCase().indexOf("NTIS") >= 0) {
+      var match = String(item.id || item.external_id || "").match(/(?:NTIS:)?(\d{6,})/);
+      if (match) return "https://www.ntis.go.kr/project/pjtInfo.do?pjtId=" + encodeURIComponent(match[1]);
+      if (item.title) return "https://www.ntis.go.kr/ThSearchResult.do?searchWord=" + encodeURIComponent(item.title);
     }
     return "";
   }
@@ -975,6 +977,7 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 

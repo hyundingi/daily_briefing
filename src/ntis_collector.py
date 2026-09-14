@@ -182,7 +182,7 @@ def parse_projects(xml_text: str, keyword: str) -> tuple[list[dict[str, str]], i
                 "budget": first_text(hit, ["TotalFunds", "GovernmentFunds"]),
                 "target": first_text(hit, ["OrganizationPNumber", "Manager/Name"]),
                 "keywords": keyword,
-                "link": "",
+                "link": f"https://www.ntis.go.kr/project/pjtInfo.do?pjtId={project_number}" if project_number else "",
             }
         )
     return projects, total
@@ -262,5 +262,6 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"[오류] {exc}", file=sys.stderr)
         raise
+
 
 

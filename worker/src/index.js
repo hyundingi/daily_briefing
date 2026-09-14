@@ -360,7 +360,7 @@ function normalizeImportedGovernmentProject(item, fallbackSource) {
     agency: clean(row.agency || row.ministry || row.order_agency || row.research_agency),
     category: clean(row.category || row.field || row.keywords) || fallbackSource,
     summary: clean(row.summary || row.goal || row.abstract || row.description),
-    link: clean(row.link || row.url),
+    link,
     announcement_date: normalizeGovernmentDate(row.announcement_date || row.start_date || row.project_year),
     deadline: normalizeGovernmentDate(row.deadline || row.end_date),
     status: clean(row.status) || statusFromDeadline(row.deadline || row.end_date),
@@ -2209,6 +2209,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 
