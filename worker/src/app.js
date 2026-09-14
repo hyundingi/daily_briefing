@@ -332,12 +332,16 @@ export const APP_JS = String.raw`
         h("input", { className: "field", value: props.query, onChange: function (event) { props.setQuery(event.target.value); }, placeholder: isNews ? "제목, 내용, AI 요약 검색" : "회사명, 제목, 내용 검색" }),
         isNews ? h("label", { className: "toggle-field" }, h("input", { type: "checkbox", checked: !!props.grouped, onChange: function (event) { props.setGrouped(event.target.checked); } }), h("span", null, "유사 뉴스 묶기")) : null
       ),
-      isNews ? h("div", { className: "news-grid" }, displayItems.length ? displayItems.map(function (item) { return h(NewsCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
+      isNews ? h("div", { className: "news-grid", key: ["news-grid", props.company, props.query, props.sort, props.grouped].join(":") }, displayItems.length ? displayItems.map(function (item) { return h(NewsCard, { key: newsCardKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
         h("div", { className: "data-list" }, displayItems.length ? displayItems.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))
     ));
   }
 
 
+
+  function newsCardKey(item) {
+    return ["news", item.company || item.company_name || "", item.id || item.link || item.url || "", item.title || "", item.published_at || item.date || item.pub_date || ""].filter(Boolean).join(":");
+  }
   function NewsCard(props) {
     var item = props.item;
     var company = item.company || item.company_name || "기타";
@@ -1090,6 +1094,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
