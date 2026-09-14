@@ -170,6 +170,17 @@ button { border: 0; cursor: pointer; }
 .division-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .profit-table { display: grid; gap: 8px; }
+.finance-chart { display: grid; gap: 10px; margin-bottom: 14px; padding: 16px; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(248,232,231,0.45)); border: 1px solid rgba(234,223,221,0.76); }
+.finance-chart-head, .finance-chart-row { display: grid; grid-template-columns: 94px minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; align-items: center; }
+.finance-chart-head { color: var(--muted); font-size: 11px; font-weight: 950; }
+.finance-company { color: var(--primary-900); font-size: 13px; font-weight: 950; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finance-bar-cell { min-width: 0; height: 28px; border-radius: 999px; background: rgba(255,255,255,0.8); overflow: hidden; border: 1px solid rgba(234,223,221,0.64); }
+.finance-bar { display: flex; align-items: center; justify-content: flex-end; min-width: 42px; height: 100%; padding: 0 9px; border-radius: 999px; color: #fff; font-size: 11px; font-weight: 950; white-space: nowrap; transition: width 0.25s ease; }
+.finance-bar.revenue { background: linear-gradient(90deg, var(--primary-400), var(--primary-600)); }
+.finance-bar.profit { background: linear-gradient(90deg, var(--primary-700), var(--primary-900)); }
+.finance-bar.negative { background: linear-gradient(90deg, #8d8787, #4b4646); }
+.finance-legend { position: static; margin-top: 2px; }
+.finance-table.compact { margin-top: 6px; }
 .finance-table { display: grid; gap: 8px; }
 .finance-row {
   display: grid;
@@ -378,9 +389,10 @@ button { border: 0; cursor: pointer; }
   .grant-grid.expanded, .trend-list.expanded, .trend-grid, .rd-analysis-grid, .rd-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grant-filter-group .field, .grant-search { width: 100%; }
   .profit-row { grid-template-columns: 1fr 1fr; }
-  .finance-row { grid-template-columns: 1fr 1fr; }
+  .finance-row, .finance-chart-head, .finance-chart-row { grid-template-columns: 1fr; }
 }
 `;
+
 
 
 

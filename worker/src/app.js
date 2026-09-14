@@ -215,17 +215,40 @@ export const APP_JS = String.raw`
   }
 
   function FinancePreview(props) {
-    var rows = financialRows(props && props.financials ? props.financials : []);
-    var content = rows.length ? h("div", { className: "finance-table" },
-      h("div", { className: "finance-row head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "기준")),
-      rows.slice(0, props && props.expanded ? 20 : 6).map(function (row) {
-        return h("div", { className: "finance-row", key: row.company }, h("span", { className: "profit-name" }, row.company), h("span", null, formatAmount(row.revenue)), h("span", null, formatAmount(row.operatingProfit)), h("span", null, row.year + " " + reportCodeLabel(row.reportCode)));
-      })
+    var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
+    var visibleRows = rows.slice(0, props && props.expanded ? 10 : 6);
+    var content = rows.length ? h(React.Fragment, null,
+      h(FinanceBarChart, { rows: visibleRows }),
+      h("div", { className: "finance-table compact" },
+        h("div", { className: "finance-row head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "기준")),
+        visibleRows.map(function (row) {
+          return h("div", { className: "finance-row", key: row.company + row.year + row.reportCode }, h("span", { className: "profit-name" }, row.company), h("span", null, formatAmount(row.revenue)), h("span", null, formatAmount(row.operatingProfit)), h("span", null, row.year + " " + reportCodeLabel(row.reportCode)));
+        })
+      )
     ) : h(FinancePlaceholderChart, null);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows.length + "개사" : "DART 재무 API" }),
+      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API" }),
       content
     ));
+  }
+
+  function FinanceBarChart(props) {
+    var rows = props.rows || [];
+    var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.revenue || 0))); }, 1);
+    var maxProfit = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.operatingProfit || 0))); }, 1);
+    return h("div", { className: "finance-chart" },
+      h("div", { className: "finance-chart-head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익")),
+      rows.map(function (row) {
+        var revenueWidth = Math.max(3, Math.round(Math.abs(Number(row.revenue || 0)) / maxRevenue * 100));
+        var profitWidth = Math.max(3, Math.round(Math.abs(Number(row.operatingProfit || 0)) / maxProfit * 100));
+        return h("div", { className: "finance-chart-row", key: "chart-" + row.company },
+          h("div", { className: "finance-company" }, row.company),
+          h("div", { className: "finance-bar-cell" }, h("div", { className: "finance-bar revenue", style: { width: revenueWidth + "%" } }, h("span", null, formatAmount(row.revenue)))),
+          h("div", { className: "finance-bar-cell" }, h("div", { className: Number(row.operatingProfit || 0) < 0 ? "finance-bar profit negative" : "finance-bar profit", style: { width: profitWidth + "%" } }, h("span", null, formatAmount(row.operatingProfit))))
+        );
+      }),
+      h("div", { className: "chart-legend finance-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익"))
+    );
   }
 
   function FinancePlaceholderChart() {
@@ -248,6 +271,21 @@ export const APP_JS = String.raw`
     return Object.values(grouped).sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0); });
   }
 
+
+  function latestFinancialRows(rows) {
+    if (!rows.length) return [];
+    var best = rows.reduce(function (current, row) {
+      if (!current) return row;
+      var rowScore = Number(row.year || 0) * 10 + reportCodeRank(row.reportCode);
+      var currentScore = Number(current.year || 0) * 10 + reportCodeRank(current.reportCode);
+      return rowScore > currentScore ? row : current;
+    }, null);
+    return rows.filter(function (row) { return row.year === best.year && row.reportCode === best.reportCode; }).sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0); });
+  }
+
+  function reportCodeRank(code) {
+    return { "11013": 1, "11012": 2, "11014": 3, "11011": 4 }[code] || 0;
+  }
   function formatAmount(value) {
     if (value === null || value === undefined || value === "") return "-";
     var billion = Math.round(Number(value) / 100000000);
@@ -1094,6 +1132,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
