@@ -412,7 +412,18 @@ export const APP_JS = String.raw`
 
 
   function RdTrendPanel(props) {
-    var ntisItems = (props && props.grants ? props.grants : []).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
+    var rdRemoteState = React.useState({ loading: false, items: [], error: "" });
+    var rdRemote = rdRemoteState[0];
+    var setRdRemote = rdRemoteState[1];
+    React.useEffect(function () {
+      if (!(props && props.expanded)) return;
+      setRdRemote(function (prev) { return prev.items.length ? prev : { loading: true, items: [], error: "" }; });
+      fetch("/api/rd/projects?limit=2000")
+        .then(function (res) { return res.json().then(function (json) { return { ok: res.ok, json: json }; }); })
+        .then(function (result) { setRdRemote(result.ok ? { loading: false, items: result.json.items || [], error: "" } : { loading: false, items: [], error: result.json.error || "NTIS 데이터를 불러오지 못했습니다." }); })
+        .catch(function (error) { setRdRemote({ loading: false, items: [], error: error.message || String(error) }); });
+    }, [props && props.expanded]);
+    var ntisItems = (props && props.expanded ? rdRemote.items : (props && props.grants ? props.grants : [])).filter(function (item) { return String(item.source || "").toUpperCase().indexOf("NTIS") >= 0; });
     var keywordState = React.useState("전체");
     var focusKeyword = keywordState[0];
     var setFocusKeyword = keywordState[1];
@@ -474,7 +485,7 @@ export const APP_JS = String.raw`
     }
     return h("section", { className: "panel rd-panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "R&D 동향", subtitle: "NTIS 과제를 공고와 분리해 정부가 실제로 돈을 쓰는 연구 분야·기관·경쟁사 신호를 봅니다.", pill: ntisItems.length ? formatNumber(ntisItems.length) + "건" : "NTIS", actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("rd_trends"); } }, "분석 보기")] : null }),
-      ntisItems.length ? h(React.Fragment, null,
+      rdRemote.loading ? h("div", { className: "empty compact" }, "NTIS 데이터를 불러오는 중입니다.") : rdRemote.error ? h("div", { className: "empty compact" }, rdRemote.error) : ntisItems.length ? h(React.Fragment, null,
         props && props.expanded ? h("div", { className: "rd-filterbar" },
           h("select", { className: "field", value: focusKeyword, onChange: resetPage(setFocusKeyword) }, keywordOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 관심분야" : name); })),
           h("select", { className: "field", value: agencyFilter, onChange: resetPage(setAgencyFilter) }, agencyOptions.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 기관" : name); })),
@@ -512,7 +523,7 @@ export const APP_JS = String.raw`
             h("button", { className: "page-button", disabled: safePage >= totalPages, onClick: function () { setPage(Math.min(totalPages, safePage + 1)); } }, "다음")
           ) : null
         )
-      ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. 로컬 수집기를 실행하면 관심분야 흐름, 반복기관, 경쟁사 신호, 투자 규모가 이곳에 표시됩니다.")
+      ) : h("div", { className: "empty compact" }, "아직 NTIS 과제 데이터가 없습니다. R&D 동향 탭에서 데이터를 다시 확인해주세요.")
     ));
   }
 
@@ -910,6 +921,8 @@ export const APP_JS = String.raw`
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 

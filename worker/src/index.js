@@ -92,7 +92,8 @@ export default {
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
       if (request.method === "GET" && url.pathname === "/api/financials") return jsonResponse(await financialMetricsFromD1(env));
       if (request.method === "GET" && url.pathname === "/api/calendar") return jsonResponse(await calendarEvents(env));
-      if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env));
+      if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env, "", { excludeSource: "NTIS", limit: 500 }));
+      if (request.method === "GET" && url.pathname === "/api/rd/projects") return jsonResponse(await rdProjectsFromD1(env, url.searchParams));
       if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
         const date = url.pathname.split("/").pop();
@@ -643,7 +644,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const cutoff = kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
   const disclosureRows = await env.DB.prepare("SELECT * FROM disclosures WHERE first_seen_at >= ? ORDER BY disclosure_date DESC, company ASC").bind(cutoff).all();
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
-  const governmentProjects = await governmentProjectsFromD1(env, cutoff);
+  const governmentProjects = await governmentProjectsFromD1(env, cutoff, { excludeSource: "NTIS", limit: 500 });
   const financialMetrics = await financialMetricsFromD1(env);
   const calendar = await calendarEvents(env, diagnostics);
   const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
@@ -887,11 +888,26 @@ async function reuseExistingGovernmentProjectIds(db, rows) {
   }
 }
 
-async function governmentProjectsFromD1(env, cutoff = "") {
+async function governmentProjectsFromD1(env, cutoff = "", options = {}) {
   if (!env.DB) return [];
   const since = cutoff || kstTimestamp(addDays(new Date(), -RETENTION_DAYS));
-  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE first_seen_at >= ? ORDER BY CASE WHEN deadline IS NULL OR deadline = '' THEN 1 ELSE 0 END, deadline ASC, announcement_date DESC`).bind(since).all();
+  const where = ["first_seen_at >= ?"];
+  const binds = [since];
+  if (options.excludeSource) { where.push("UPPER(source) != UPPER(?)"); binds.push(options.excludeSource); }
+  if (options.source) { where.push("UPPER(source) = UPPER(?)"); binds.push(options.source); }
+  const limit = Math.max(1, Math.min(Number(options.limit || 500), 2000));
+  binds.push(limit);
+  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE ${where.join(" AND ")} ORDER BY CASE WHEN deadline IS NULL OR deadline = '' THEN 1 ELSE 0 END, deadline ASC, announcement_date DESC LIMIT ?`).bind(...binds).all();
   return (rows.results || []).map(governmentProjectFromDb);
+}
+
+async function rdProjectsFromD1(env, params) {
+  if (!env.DB) return { ok: true, total: 0, items: [] };
+  const limit = Math.max(1, Math.min(Number(params.get("limit") || 1500), 2000));
+  const countRows = await env.DB.prepare(`SELECT COUNT(*) AS total FROM government_projects WHERE UPPER(source) = 'NTIS'`).all();
+  const rows = await env.DB.prepare(`SELECT * FROM government_projects WHERE UPPER(source) = 'NTIS' ORDER BY announcement_date DESC, first_seen_at DESC LIMIT ?`).bind(limit).all();
+  const items = (rows.results || []).map(governmentProjectFromDb);
+  return { ok: true, total: Number(countRows.results && countRows.results[0] ? countRows.results[0].total : items.length), limit, items };
 }
 
 function governmentProjectFromDb(row) {
@@ -2193,6 +2209,9 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
+
 
 
 
