@@ -459,12 +459,12 @@ export const APP_JS = String.raw`
     var url = item.url || item.link || item.dart_url || item.viewer_url || "#";
     return h("article", { className: item.important ? "disclosure-card important" : "disclosure-card" },
       h("div", { className: "disclosure-card-top" },
-        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company)
+        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company),
+        h("span", { className: "disclosure-category" }, item.category || "공시")
       ),
       h("a", { className: "disclosure-title", href: url, target: "_blank", rel: "noreferrer" }, item.title || item.report_nm || "제목 없음"),
       h("div", { className: "item-meta" }, [item.date || item.rcept_dt || "", item.important ? "중요" : ""].filter(Boolean).join(" · ")),
-      renderAiSummary(item),
-      item.note ? h("p", { className: "disclosure-note" }, cleanSnippet(item.note)) : null
+      renderAiSummary(item)
     );
   }
   function newsCardKey(item) {
@@ -821,7 +821,7 @@ function projectLink(item) {
   }
 
   function Ticker(props) {
-    var items = (props.news || []).slice(0, 18);
+    var items = representativeNews((props.news || []).slice()).sort(function (a, b) { return dateValue(b) - dateValue(a); }).slice(0, 18);
     if (!items.length) return null;
     return h("div", { className: "ticker" }, h("div", { className: "ticker-track" }, items.concat(items).map(function (item, index) { var url = item.url || item.link || "#"; return h("a", { className: "ticker-item", key: index, href: url, target: "_blank", rel: "noreferrer" }, (item.company || "") + " · " + (item.title || "")); })));
   }
@@ -1224,6 +1224,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
