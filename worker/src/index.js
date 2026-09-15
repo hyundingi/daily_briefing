@@ -606,7 +606,7 @@ function renderNewsletterHtml({ date, createdAt, since, disclosures, news }) {
 <body style="margin:0;background:#f6f1e9;color:#26221d;font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
   <div style="max-width:760px;margin:0 auto;padding:28px 18px 36px;">
     <div style="background:#fffaf3;border-radius:26px;padding:28px 30px;box-shadow:0 10px 28px rgba(62,49,32,.08);">
-      <p style="margin:0 0 8px;color:#8b7a66;font-size:14px;font-weight:700;">${escapeHtml(createdAt)} 생성 · 기준 ${escapeHtml(since)}</p>
+      <p style="margin:0 0 8px;color:#8b7a66;font-size:14px;font-weight:700;">생성 ${escapeHtml(createdAt)} · 마지막 발송 이후 ${escapeHtml(since)}</p>
       <h1 style="margin:0;color:#241f1a;font-size:30px;letter-spacing:-.03em;">${escapeHtml(date.replaceAll("-", "."))} 경쟁사 브리핑</h1>
       <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
         <span style="display:inline-block;padding:9px 13px;border-radius:999px;background:#f0e8dc;color:#5f5142;font-weight:800;">신규 공시 ${disclosures.length}건</span>
@@ -2241,11 +2241,22 @@ function yyyymmdd(date) {
 }
 
 function kstDateKey(date) {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  return formatKstParts(date).slice(0, 10);
 }
 
 function kstTimestamp(date) {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
+  return formatKstParts(date);
+}
+
+function formatKstParts(date) {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const year = kst.getUTCFullYear();
+  const month = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(kst.getUTCDate()).padStart(2, "0");
+  const hour = String(kst.getUTCHours()).padStart(2, "0");
+  const minute = String(kst.getUTCMinutes()).padStart(2, "0");
+  const second = String(kst.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 function companyIndex(company) {
@@ -2267,6 +2278,8 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
 
 
 

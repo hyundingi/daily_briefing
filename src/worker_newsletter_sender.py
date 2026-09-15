@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -66,7 +67,7 @@ def generate_newsletter() -> dict:
 
 
 def mark_sent(run_id: str) -> None:
-    sent_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sent_at = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
     worker_request("POST", "/api/newsletter/mark-sent", json={"id": run_id, "sent_at": sent_at})
     print(f"[뉴스레터] 발송 완료 기록: {run_id} / {sent_at}")
 
@@ -90,3 +91,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
