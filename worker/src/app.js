@@ -216,115 +216,119 @@ export const APP_JS = String.raw`
   }
 
   function FinancePreview(props) {
-    var basisState = React.useState("");
-    var selectedBasis = basisState[0];
-    var setSelectedBasis = basisState[1];
     var allRows = financialRows(props && props.financials ? props.financials : []);
-    var basisOptions = financialBasisOptions(allRows);
-    var selected = financialRowsByBasis(allRows, selectedBasis || (basisOptions[0] && basisOptions[0].key) || "");
-    var rows = selected.rows;
-    var visibleRows = rows.slice(0, 10);
-    var content = h(FinanceLineChart, { rows: visibleRows });
+    var pair = latestComparableFinancialPair(allRows);
+    var currentLabel = pair.currentBasis ? pair.currentBasis.label : "DART 재무 API";
+    var compareLabel = pair.compareBasis ? pair.compareBasis.label : "전년 동기";
+    var rows = financialComparisonRows(pair.currentRows, pair.compareRows);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: selected.basis ? selected.basis.label : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
-      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selected.basis ? selected.basis.key : "", setSelectedBasis: setSelectedBasis }),
-      content
+      h(PanelHead, { title: "상위사 실적비교", subtitle: "같은 보고서 기준끼리 전년 동기 실적을 비교합니다.", pill: pair.currentBasis ? currentLabel + " vs " + compareLabel : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, pair.currentBasis ? "재무 다시 수집" : "DART 재무 수집")] : null }),
+      pair.currentBasis ? h(FinanceComparisonBars, { rows: rows, compact: true }) : h(FinancePlaceholderChart, null)
     ));
   }
 
   function FinancePage(props) {
-    var basisState = React.useState("");
-    var selectedBasis = basisState[0];
-    var setSelectedBasis = basisState[1];
     var allRows = financialRows(props && props.financials ? props.financials : []);
     var basisOptions = financialBasisOptions(allRows);
-    var selected = financialRowsByBasis(allRows, selectedBasis || (basisOptions[0] && basisOptions[0].key) || "");
-    var rows = selected.rows;
-    var basis = selected.basis ? selected.basis.label : "DART 재무 API";
+    var defaultBasis = latestComparableFinancialPair(allRows).currentBasis || basisOptions[0] || null;
+    var reportTypeState = React.useState("");
+    var reportType = reportTypeState[0];
+    var setReportType = reportTypeState[1];
+    var yearState = React.useState("");
+    var selectedYear = yearState[0];
+    var setSelectedYear = yearState[1];
+    var selectedReportCode = reportType || (defaultBasis && defaultBasis.reportCode) || "11012";
+    var yearOptions = financialYearsForReportCode(basisOptions, selectedReportCode);
+    var effectiveYear = selectedYear && yearOptions.indexOf(selectedYear) >= 0 ? selectedYear : (yearOptions[0] || (defaultBasis && defaultBasis.year) || "");
+    var currentBasis = financialBasisFromParts(basisOptions, effectiveYear, selectedReportCode);
+    var compareBasis = currentBasis ? financialBasisFromParts(basisOptions, String(Number(currentBasis.year) - 1), currentBasis.reportCode) : null;
+    var currentRows = currentBasis ? financialRowsByBasis(allRows, currentBasis.key).rows : completeFinancialRows([], currentBasis);
+    var compareRows = compareBasis ? financialRowsByBasis(allRows, compareBasis.key).rows : completeFinancialRows([], compareBasis || previousBasisFrom(currentBasis));
+    var rows = financialComparisonRows(currentRows, compareRows);
+    var basisLabel = currentBasis ? currentBasis.label : "DART 재무 API";
+    var compareLabel = compareBasis ? compareBasis.label : "전년 동기 데이터 없음";
     var actions = props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null;
     return h("section", { className: "panel finance-page" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "재무비교", subtitle: "회사별 주요 재무계정을 표로 비교합니다. 단위는 억 원입니다.", pill: basis, actions: actions }),
-      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selected.basis ? selected.basis.key : "", setSelectedBasis: setSelectedBasis }),
-      h("div", { className: "finance-detail-table-wrap" },
-        h("table", { className: "finance-detail-table" },
-          h("thead", null, h("tr", null,
-            h("th", null, "회사"),
-            h("th", null, "매출액"),
-            h("th", null, "영업이익"),
-            h("th", null, "당기순이익"),
-            h("th", null, "자산총계"),
-            h("th", null, "부채총계"),
-            h("th", null, "자본총계"),
-            h("th", null, "부채비율")
-          )),
-          h("tbody", null, rows.map(function (row) {
-            var isDongA = row.company === "동아에스티";
-            return h("tr", { key: "finance-detail-" + row.company, className: isDongA ? "highlight" : "" },
-              h("td", { className: "company-cell" }, row.company),
-              h("td", null, formatAmountShort(row.revenue)),
-              h("td", null, formatAmountShort(row.operatingProfit)),
-              h("td", null, formatAmountShort(row.netIncome)),
-              h("td", null, formatAmountShort(row.assets)),
-              h("td", null, formatAmountShort(row.liabilities)),
-              h("td", null, formatAmountShort(row.equity)),
-              h("td", null, formatRatio(row.liabilities, row.equity))
-            );
-          }))
-        )
-      )
+      h(PanelHead, { title: "재무비교", subtitle: "보고서 기준을 맞춰 회사별 실적과 전년 동기 증감률을 비교합니다.", pill: currentBasis ? basisLabel + " vs " + compareLabel : "DART 재무 API", actions: actions }),
+      h(FinanceFilterToolbar, { basisOptions: basisOptions, reportCode: selectedReportCode, setReportCode: function (value) { setReportType(value); setSelectedYear(""); }, year: effectiveYear, years: yearOptions, setYear: setSelectedYear }),
+      currentBasis ? h(FinanceSummaryCards, { rows: rows }) : h(FinancePlaceholderChart, null),
+      currentBasis ? h(FinanceComparisonBars, { rows: rows }) : null,
+      currentBasis ? h(FinanceComparisonTable, { rows: rows, currentBasis: currentBasis, compareBasis: compareBasis }) : null
     ));
   }
 
-  function FinanceBasisToolbar(props) {
-    var options = props.basisOptions || [];
-    return h("div", { className: "finance-basis-toolbar" },
-      h("label", { className: "finance-basis-label" }, "기준"),
-      h("select", { className: "finance-basis-select", value: props.selectedBasis || "", onChange: function (event) { props.setSelectedBasis(event.target.value); }, disabled: !options.length },
-        options.length ? options.map(function (option) { return h("option", { key: option.key, value: option.key }, option.label); }) : h("option", { value: "" }, "데이터 없음")
-      ),
-      h("span", { className: "finance-basis-help" }, options.length ? "선택 기준에 데이터가 없는 회사는 0으로 표시됩니다." : "재무 데이터를 수집하면 기준을 선택할 수 있습니다.")
+  function FinanceFilterToolbar(props) {
+    return h("div", { className: "finance-filter-toolbar" },
+      h("label", null, h("span", null, "기준 유형"), h("select", { className: "finance-basis-select", value: props.reportCode, onChange: function (event) { props.setReportCode(event.target.value); } },
+        ["11012", "11013", "11014", "11011"].map(function (code) { return h("option", { key: code, value: code }, reportCodeLabel(code)); })
+      )),
+      h("label", null, h("span", null, "기준 연도"), h("select", { className: "finance-basis-select", value: props.year || "", onChange: function (event) { props.setYear(event.target.value); }, disabled: !(props.years || []).length },
+        (props.years || []).length ? props.years.map(function (year) { return h("option", { key: year, value: year }, year + "년"); }) : h("option", { value: "" }, "데이터 없음")
+      )),
+      h("p", { className: "finance-basis-help" }, "선택한 기준과 같은 보고서의 전년 동기를 비교합니다.")
     );
   }
 
-  function FinanceLineChart(props) {
+  function FinanceSummaryCards(props) {
     var rows = props.rows || [];
-    var width = 760;
-    var height = 330;
-    var pad = { left: 64, right: 46, top: 42, bottom: 76 };
-    var innerW = width - pad.left - pad.right;
-    var innerH = height - pad.top - pad.bottom;
-    var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.revenue || 0))); }, 1);
-    var maxProfit = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.operatingProfit || 0))); }, 1);
-    function x(index) { return pad.left + (rows.length <= 1 ? innerW / 2 : index * innerW / (rows.length - 1)); }
-    function y(value, max) { return pad.top + innerH - Math.max(0, Math.min(1, Math.abs(Number(value || 0)) / max)) * innerH; }
-    function points(key, max) { return rows.map(function (row, index) { return x(index) + "," + y(row[key], max); }).join(" "); }
-    return h("div", { className: "finance-line-card" },
-      h("div", { className: "finance-line-note" }, "회사별 매출액과 영업이익을 함께 비교합니다. 숫자는 실제 금액, 선은 각각 최대값 대비 비율입니다."),
-      h("svg", { className: "finance-line-chart", viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": "상위사 매출액과 영업이익 비교 그래프" },
-        [0, 0.25, 0.5, 0.75, 1].map(function (tick) {
-          var yPos = pad.top + innerH - tick * innerH;
-          return h("g", { key: "grid-" + tick },
-            h("line", { x1: pad.left, y1: yPos, x2: width - pad.right, y2: yPos, className: "finance-grid-line" }),
-            h("text", { x: pad.left - 10, y: yPos + 4, className: "finance-axis-text", textAnchor: "end" }, Math.round(tick * 100) + "%")
-          );
-        }),
-        h("polyline", { points: points("revenue", maxRevenue), className: "finance-polyline revenue" }),
-        h("polyline", { points: points("operatingProfit", maxProfit), className: "finance-polyline profit" }),
-        rows.map(function (row, index) {
-          var xPos = x(index);
-          var revenueY = y(row.revenue, maxRevenue);
-          var profitY = y(row.operatingProfit, maxProfit);
+    var revenueLeader = rows.slice().sort(function (a, b) { return b.revenue - a.revenue; })[0];
+    var profitLeader = rows.slice().sort(function (a, b) { return b.operatingProfit - a.operatingProfit; })[0];
+    var donga = rows.filter(function (row) { return row.company === "동아에스티"; })[0];
+    var dongaRank = rows.slice().sort(function (a, b) { return b.revenue - a.revenue; }).findIndex(function (row) { return row.company === "동아에스티"; }) + 1;
+    return h("div", { className: "finance-summary-grid" },
+      h("article", null, h("span", null, "매출 1위"), h("strong", null, revenueLeader ? revenueLeader.company : "-"), h("em", null, revenueLeader ? formatAmount(revenueLeader.revenue) : "-")),
+      h("article", null, h("span", null, "영업이익 1위"), h("strong", null, profitLeader ? profitLeader.company : "-"), h("em", null, profitLeader ? formatAmount(profitLeader.operatingProfit) : "-")),
+      h("article", null, h("span", null, "동아에스티 매출 순위"), h("strong", null, dongaRank ? dongaRank + "위" : "-"), h("em", { className: changeClass(donga && donga.revenueChange) }, donga ? formatChange(donga.revenueChange) : "-"))
+    );
+  }
+
+  function FinanceComparisonBars(props) {
+    var rows = props.rows || [];
+    var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(row.revenue || 0)); }, 1);
+    var maxProfit = rows.reduce(function (max, row) { return Math.max(max, Math.abs(row.operatingProfit || 0)); }, 1);
+    return h("div", { className: props.compact ? "finance-bars compact" : "finance-bars" },
+      h("div", { className: "finance-bars-head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "전년동기")),
+      rows.map(function (row) {
+        var isDongA = row.company === "동아에스티";
+        return h("div", { key: "finance-bar-" + row.company, className: isDongA ? "finance-bar-row highlight" : "finance-bar-row" },
+          h("div", { className: "finance-bar-company" }, row.company),
+          h("div", { className: "finance-bar-cell" }, h("div", { className: "bar-track" }, h("span", { className: "bar-fill revenue", style: { width: Math.max(2, Math.round((row.revenue || 0) / maxRevenue * 100)) + "%" } })), h("b", null, formatAmount(row.revenue))),
+          h("div", { className: "finance-bar-cell" }, h("div", { className: "bar-track" }, h("span", { className: "bar-fill profit", style: { width: Math.max(2, Math.round((row.operatingProfit || 0) / maxProfit * 100)) + "%" } })), h("b", null, formatAmount(row.operatingProfit))),
+          h("div", { className: "finance-change-pair" }, h("span", { className: changeClass(row.revenueChange) }, "매출 " + formatChange(row.revenueChange)), h("span", { className: changeClass(row.operatingProfitChange) }, "영업 " + formatChange(row.operatingProfitChange)))
+        );
+      })
+    );
+  }
+
+  function FinanceComparisonTable(props) {
+    var currentLabel = props.currentBasis ? props.currentBasis.label : "현재";
+    var compareLabel = props.compareBasis ? props.compareBasis.label : "전년 동기";
+    return h("div", { className: "finance-detail-table-wrap" },
+      h("table", { className: "finance-detail-table finance-comparison-table" },
+        h("thead", null, h("tr", null,
+          h("th", null, "회사"),
+          h("th", null, currentLabel + " 매출"),
+          h("th", null, compareLabel + " 매출"),
+          h("th", null, "매출 증감률"),
+          h("th", null, currentLabel + " 영업이익"),
+          h("th", null, compareLabel + " 영업이익"),
+          h("th", null, "영업이익 증감률"),
+          h("th", null, "부채비율")
+        )),
+        h("tbody", null, props.rows.map(function (row) {
           var isDongA = row.company === "동아에스티";
-          return h("g", { key: "point-" + row.company, className: isDongA ? "finance-point highlight" : "finance-point" },
-            h("circle", { cx: xPos, cy: revenueY, r: isDongA ? 6 : 4.5, className: "finance-dot revenue" }),
-            h("circle", { cx: xPos, cy: profitY, r: isDongA ? 6 : 4.5, className: "finance-dot profit" }),
-            h("text", { x: xPos, y: Math.max(14, revenueY - 11), className: "finance-value-label revenue", textAnchor: "middle" }, formatAmount(row.revenue)),
-            h("text", { x: xPos, y: Math.min(height - pad.bottom - 4, profitY + 18), className: "finance-value-label profit", textAnchor: "middle" }, formatAmount(row.operatingProfit)),
-            h("text", { x: xPos, y: height - 38, className: isDongA ? "finance-company-label highlight" : "finance-company-label", textAnchor: "end", transform: "rotate(-18 " + xPos + " " + (height - 38) + ")" }, row.company)
+          return h("tr", { key: "finance-detail-" + row.company, className: isDongA ? "highlight" : "" },
+            h("td", { className: "company-cell" }, row.company),
+            h("td", null, formatAmountShort(row.revenue)),
+            h("td", null, formatAmountShort(row.prevRevenue)),
+            h("td", { className: changeClass(row.revenueChange) }, formatChange(row.revenueChange)),
+            h("td", null, formatAmountShort(row.operatingProfit)),
+            h("td", null, formatAmountShort(row.prevOperatingProfit)),
+            h("td", { className: changeClass(row.operatingProfitChange) }, formatChange(row.operatingProfitChange)),
+            h("td", null, formatRatio(row.liabilities, row.equity))
           );
-        })
-      ),
-      h("div", { className: "chart-legend finance-legend" }, h("span", null, h("i", { className: "legend-dot" }), "매출액"), h("span", null, h("i", { className: "legend-dot dark" }), "영업이익"))
+        }))
+      )
     );
   }
 
@@ -359,6 +363,33 @@ export const APP_JS = String.raw`
     return Object.values(map).sort(function (a, b) { return b.score - a.score; });
   }
 
+  function latestComparableFinancialPair(rows) {
+    var options = financialBasisOptions(rows);
+    var withCompare = options.filter(function (option) { return financialBasisFromParts(options, String(Number(option.year) - 1), option.reportCode); });
+    var currentBasis = withCompare[0] || options[0] || null;
+    var compareBasis = currentBasis ? financialBasisFromParts(options, String(Number(currentBasis.year) - 1), currentBasis.reportCode) : null;
+    return {
+      currentBasis: currentBasis,
+      compareBasis: compareBasis,
+      currentRows: currentBasis ? financialRowsByBasis(rows, currentBasis.key).rows : [],
+      compareRows: compareBasis ? financialRowsByBasis(rows, compareBasis.key).rows : completeFinancialRows([], previousBasisFrom(currentBasis))
+    };
+  }
+
+  function financialYearsForReportCode(options, reportCode) {
+    return options.filter(function (option) { return option.reportCode === reportCode; }).map(function (option) { return option.year; }).filter(function (year, index, arr) { return arr.indexOf(year) === index; }).sort(function (a, b) { return Number(b) - Number(a); });
+  }
+
+  function financialBasisFromParts(options, year, reportCode) {
+    return (options || []).filter(function (option) { return option.year === year && option.reportCode === reportCode; })[0] || null;
+  }
+
+  function previousBasisFrom(basis) {
+    if (!basis) return null;
+    var year = String(Number(basis.year) - 1);
+    return { key: year + ":" + basis.reportCode, year: year, reportCode: basis.reportCode, label: year + " " + reportCodeLabel(basis.reportCode), score: Number(year) * 10 + reportCodeRank(basis.reportCode) };
+  }
+
   function financialRowsByBasis(rows, selectedBasis) {
     var options = financialBasisOptions(rows);
     var basis = options[0] || null;
@@ -381,6 +412,26 @@ export const APP_JS = String.raw`
         equity: Number(found.equity || 0)
       });
       return { company: company, year: basis ? basis.year : "", reportCode: basis ? basis.reportCode : "", revenue: 0, operatingProfit: 0, netIncome: 0, assets: 0, liabilities: 0, equity: 0 };
+    }).sort(compareFinancialCompanies);
+  }
+
+  function financialComparisonRows(currentRows, compareRows) {
+    return FINANCIAL_COMPANIES.map(function (company) {
+      var current = currentRows.filter(function (row) { return row.company === company; })[0] || {};
+      var prev = compareRows.filter(function (row) { return row.company === company; })[0] || {};
+      return {
+        company: company,
+        revenue: Number(current.revenue || 0),
+        prevRevenue: Number(prev.revenue || 0),
+        revenueChange: percentChange(current.revenue, prev.revenue),
+        operatingProfit: Number(current.operatingProfit || 0),
+        prevOperatingProfit: Number(prev.operatingProfit || 0),
+        operatingProfitChange: percentChange(current.operatingProfit, prev.operatingProfit),
+        netIncome: Number(current.netIncome || 0),
+        assets: Number(current.assets || 0),
+        liabilities: Number(current.liabilities || 0),
+        equity: Number(current.equity || 0)
+      };
     }).sort(compareFinancialCompanies);
   }
 
@@ -413,6 +464,26 @@ export const APP_JS = String.raw`
     if (value === null || value === undefined || value === "") return "-";
     var billion = Math.round(Number(value) / 100000000);
     return billion.toLocaleString("ko-KR");
+  }
+
+  function percentChange(current, previous) {
+    var c = Number(current || 0);
+    var p = Number(previous || 0);
+    if (!p) return null;
+    return (c - p) / Math.abs(p) * 100;
+  }
+
+  function formatChange(value) {
+    if (value === null || value === undefined || !isFinite(value)) return "-";
+    var prefix = value > 0 ? "+" : "";
+    return prefix + value.toFixed(1) + "%";
+  }
+
+  function changeClass(value) {
+    if (value === null || value === undefined || !isFinite(value)) return "change muted";
+    if (value > 0) return "change up";
+    if (value < 0) return "change down";
+    return "change flat";
   }
 
   function formatRatio(numerator, denominator) {
@@ -1280,6 +1351,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
