@@ -226,9 +226,9 @@ export const APP_JS = String.raw`
 
   function FinanceLineChart(props) {
     var rows = props.rows || [];
-    var width = 720;
+    var width = 760;
     var height = 330;
-    var pad = { left: 42, right: 24, top: 42, bottom: 78 };
+    var pad = { left: 64, right: 46, top: 42, bottom: 76 };
     var innerW = width - pad.left - pad.right;
     var innerH = height - pad.top - pad.bottom;
     var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.revenue || 0))); }, 1);
@@ -258,7 +258,7 @@ export const APP_JS = String.raw`
             h("circle", { cx: xPos, cy: profitY, r: isDongA ? 6 : 4.5, className: "finance-dot profit" }),
             h("text", { x: xPos, y: Math.max(14, revenueY - 11), className: "finance-value-label revenue", textAnchor: "middle" }, formatAmount(row.revenue)),
             h("text", { x: xPos, y: Math.min(height - pad.bottom - 4, profitY + 18), className: "finance-value-label profit", textAnchor: "middle" }, formatAmount(row.operatingProfit)),
-            h("text", { x: xPos, y: height - 42, className: isDongA ? "finance-company-label highlight" : "finance-company-label", textAnchor: "end", transform: "rotate(-28 " + xPos + " " + (height - 42) + ")" }, row.company)
+            h("text", { x: xPos, y: height - 38, className: isDongA ? "finance-company-label highlight" : "finance-company-label", textAnchor: "end", transform: "rotate(-18 " + xPos + " " + (height - 38) + ")" }, row.company)
           );
         })
       ),
@@ -1153,6 +1153,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 

@@ -180,8 +180,8 @@ button { border: 0; cursor: pointer; }
 .finance-line-chart { display: block; width: 100%; height: auto; min-height: 300px; }
 .finance-grid-line { stroke: rgba(148,64,60,0.14); stroke-width: 1; }
 .finance-axis-text { fill: #8d7876; font-size: 11px; font-weight: 800; }
-.finance-company-label { fill: var(--primary-900); font-size: 11px; font-weight: 900; }
-.finance-company-label.highlight { fill: var(--primary-950); font-size: 12px; font-weight: 1000; }
+.finance-company-label { fill: var(--primary-900); font-size: 10px; font-weight: 900; }
+.finance-company-label.highlight { fill: var(--primary-950); font-size: 11px; font-weight: 1000; }
 .finance-polyline { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 7px 12px rgba(148,64,60,0.16)); }
 .finance-polyline.revenue { stroke: var(--primary-500); }
 .finance-polyline.profit { stroke: var(--primary-900); }
@@ -189,7 +189,7 @@ button { border: 0; cursor: pointer; }
 .finance-dot.revenue { fill: var(--primary-500); }
 .finance-dot.profit { fill: var(--primary-900); }
 .finance-point.highlight .finance-dot { stroke-width: 3.5; filter: drop-shadow(0 4px 8px rgba(148,64,60,0.32)); }
-.finance-value-label { paint-order: stroke; stroke: rgba(255,255,255,0.92); stroke-width: 4px; fill: var(--primary-950); font-size: 10px; font-weight: 950; }
+.finance-value-label { paint-order: stroke; stroke: rgba(255,255,255,0.92); stroke-width: 4px; fill: var(--primary-950); font-size: 9px; font-weight: 900; }
 .finance-value-label.profit { fill: #4c201e; }
 .finance-legend { position: static; margin-top: 10px; }
 .finance-table.compact { margin-top: 6px; }
@@ -237,7 +237,7 @@ button { border: 0; cursor: pointer; }
 .item-title { display: block; margin: 10px 0 8px; font-size: 15px; line-height: 1.45; font-weight: 950; letter-spacing: -0.025em; }
 .news-card { min-width: 0; padding: 16px; border-radius: 22px; background: rgba(255,255,255,0.76); border: 1px solid rgba(234,223,221,0.82); box-shadow: 0 14px 32px rgba(91,73,70,0.06); }
 .news-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.news-category { padding: 5px 8px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 11px; font-weight: 900; }
+.news-category { padding: 5px 8px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 10px; font-weight: 900; }
 .news-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 42px; color: var(--text); text-decoration: none; font-size: 15px; line-height: 1.42; font-weight: 950; letter-spacing: -0.025em; }
 .news-title:hover { color: var(--primary-800); text-decoration: underline; }
 .news-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 63px; margin: 10px 0 12px; color: #5f5655; font-size: 13px; line-height: 1.6; }
@@ -404,6 +404,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr; }
 }
 `;
+
 
 
 
