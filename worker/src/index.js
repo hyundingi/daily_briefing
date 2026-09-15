@@ -649,9 +649,9 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const governmentProjects = await governmentProjectsFromD1(env, cutoff, { excludeSource: "NTIS", limit: 500 });
   const financialMetrics = await financialMetricsFromD1(env);
   const calendar = await calendarEvents(env, diagnostics);
-  const disclosures = (disclosureRows.results || []).map(disclosureFromDb);
-  const news = (newsRows.results || []).map(newsFromDb);
   const itemSummaries = await itemSummariesFromD1(env);
+  const disclosures = attachItemSummaries((disclosureRows.results || []).map(disclosureFromDb), itemSummaries);
+  const news = attachItemSummaries((newsRows.results || []).map(newsFromDb), itemSummaries);
   return {
     ok: true,
     date: kstDateKey(new Date()),
@@ -865,12 +865,27 @@ async function filterNewRows(db, table, rows, keyFn) {
   return result;
 }
 
+function attachItemSummaries(items, summaries) {
+  return items.map((item) => {
+    const summary = summaries && summaries[`${item.type}:${item.id}`];
+    if (!summary) return item;
+    return {
+      ...item,
+      ai_summary: summary.summary || "",
+      key_points: summary.key_points || "",
+      caution: summary.caution || "",
+      ai_model: summary.model || "",
+      ai_created_at: summary.created_at || "",
+    };
+  });
+}
+
 function disclosureFromDb(row) {
-  return { type: "disclosure", company: row.company, category: row.category, title: row.title, receipt_no: row.receipt_no, date: row.disclosure_date, is_revision: !!row.is_revision, note: row.note, link: row.link, score: row.score || 0, important: !!row.important };
+  return { id: row.id, type: "disclosure", company: row.company, category: row.category, title: row.title, receipt_no: row.receipt_no, date: row.disclosure_date, is_revision: !!row.is_revision, note: row.note, link: row.link, score: row.score || 0, important: !!row.important };
 }
 
 function newsFromDb(row) {
-  return { type: "news", company: row.company, category: row.category, title: row.title, summary: row.summary, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important };
+  return { id: row.id, type: "news", company: row.company, category: row.category, title: row.title, summary: row.summary, link: row.link, media: row.media, published_at: row.published_at, important: !!row.important };
 }
 
 async function reuseExistingGovernmentProjectIds(db, rows) {
@@ -2234,6 +2249,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 

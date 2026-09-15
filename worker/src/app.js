@@ -796,9 +796,11 @@ function projectLink(item) {
   }
 
   function renderAiSummary(item) {
-    var text = item.ai_summary || item.summary || item.ai_briefing || "";
+    var aiParts = [item.ai_summary, item.key_points, item.caution].filter(Boolean);
+    var fallback = item.ai_briefing || (!aiParts.length ? item.summary : "");
+    var text = aiParts.length ? aiParts.join("\n") : fallback;
     if (!text) return null;
-    var lines = String(text).replace(/<br\s*\/?>(\s*)/gi, "\n").split(/\n+/).map(function (line) { return line.trim(); }).filter(Boolean);
+    var lines = String(text).replace(/<br\s*\/?>(\s*)/gi, "\n").split(/\n+/).map(function (line) { return line.trim(); }).filter(Boolean).slice(0, 4);
     return h("div", { className: "ai-box" }, lines.map(function (line, index) { return h("p", { key: index }, line); }));
   }
 
@@ -1206,6 +1208,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
