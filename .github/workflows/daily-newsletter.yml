@@ -55,3 +55,4 @@ jobs:
           EMAIL_REQUIRED: "true"
           SEND_EMAIL: "true"
         run: python -m src.worker_newsletter_sender
+
