@@ -459,8 +459,7 @@ export const APP_JS = String.raw`
     var url = item.url || item.link || item.dart_url || item.viewer_url || "#";
     return h("article", { className: item.important ? "disclosure-card important" : "disclosure-card" },
       h("div", { className: "disclosure-card-top" },
-        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company),
-        h("span", { className: "disclosure-category" }, item.category || "공시")
+        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company)
       ),
       h("a", { className: "disclosure-title", href: url, target: "_blank", rel: "noreferrer" }, item.title || item.report_nm || "제목 없음"),
       h("div", { className: "item-meta" }, [item.date || item.rcept_dt || "", item.important ? "중요" : ""].filter(Boolean).join(" · ")),
@@ -1225,6 +1224,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
