@@ -435,6 +435,7 @@ export const APP_JS = String.raw`
 
   function DataPage(props) {
     var isNews = props.type === "news";
+    var isDisclosure = props.type === "disclosure";
     var displayItems = isNews ? prepareNewsItems(filterItems(props.rawItems || props.items || [], props.company, props.query), { grouped: props.grouped, sort: props.sort }) : (props.items || []);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: props.title, subtitle: props.subtitle, pill: displayItems.length + "건" }),
@@ -445,12 +446,28 @@ export const APP_JS = String.raw`
         isNews ? h("label", { className: "toggle-field" }, h("input", { type: "checkbox", checked: !!props.grouped, onChange: function (event) { props.setGrouped(event.target.checked); } }), h("span", null, "유사 뉴스 묶기")) : null
       ),
       isNews ? h("div", { className: "news-grid", key: ["news-grid", props.company, props.query, props.sort, props.grouped].join(":") }, displayItems.length ? displayItems.map(function (item) { return h(NewsCard, { key: newsCardKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 뉴스가 없습니다.")) :
+        isDisclosure ? h("div", { className: "disclosure-grid" }, displayItems.length ? displayItems.map(function (item) { return h(DisclosureCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 공시가 없습니다.")) :
         h("div", { className: "data-list" }, displayItems.length ? displayItems.map(function (item) { return h(ItemCard, { key: itemKey(item), item: item }); }) : h("div", { className: "empty" }, "조건에 맞는 항목이 없습니다."))
     ));
   }
 
 
 
+  function DisclosureCard(props) {
+    var item = props.item;
+    var company = item.company || item.company_name || "기타";
+    var url = item.url || item.link || item.dart_url || item.viewer_url || "#";
+    return h("article", { className: item.important ? "disclosure-card important" : "disclosure-card" },
+      h("div", { className: "disclosure-card-top" },
+        h("span", { className: "company-chip", style: { backgroundColor: COMPANY_COLORS[company] || "#94403c" } }, company),
+        h("span", { className: "disclosure-category" }, item.category || "공시")
+      ),
+      h("a", { className: "disclosure-title", href: url, target: "_blank", rel: "noreferrer" }, item.title || item.report_nm || "제목 없음"),
+      h("div", { className: "item-meta" }, [item.date || item.rcept_dt || "", item.important ? "중요" : ""].filter(Boolean).join(" · ")),
+      renderAiSummary(item),
+      item.note ? h("p", { className: "disclosure-note" }, cleanSnippet(item.note)) : null
+    );
+  }
   function newsCardKey(item) {
     return ["news", item.company || item.company_name || "", item.id || item.link || item.url || "", item.title || "", item.published_at || item.date || item.pub_date || ""].filter(Boolean).join(":");
   }
@@ -1208,6 +1225,10 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
+
+
 
 
 
