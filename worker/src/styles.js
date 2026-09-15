@@ -177,16 +177,20 @@ button { border: 0; cursor: pointer; }
 .finance-empty-guide strong { color: var(--primary-900); }
 .finance-line-card { margin-bottom: 14px; padding: 16px; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(248,232,231,0.42)); border: 1px solid rgba(234,223,221,0.76); overflow: hidden; }
 .finance-line-note { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 750; }
-.finance-line-chart { display: block; width: 100%; height: auto; min-height: 230px; }
+.finance-line-chart { display: block; width: 100%; height: auto; min-height: 300px; }
 .finance-grid-line { stroke: rgba(148,64,60,0.14); stroke-width: 1; }
 .finance-axis-text { fill: #8d7876; font-size: 11px; font-weight: 800; }
 .finance-company-label { fill: var(--primary-900); font-size: 11px; font-weight: 900; }
+.finance-company-label.highlight { fill: var(--primary-950); font-size: 12px; font-weight: 1000; }
 .finance-polyline { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 7px 12px rgba(148,64,60,0.16)); }
 .finance-polyline.revenue { stroke: var(--primary-500); }
 .finance-polyline.profit { stroke: var(--primary-900); }
 .finance-dot { stroke: #fff; stroke-width: 2.5; }
 .finance-dot.revenue { fill: var(--primary-500); }
 .finance-dot.profit { fill: var(--primary-900); }
+.finance-point.highlight .finance-dot { stroke-width: 3.5; filter: drop-shadow(0 4px 8px rgba(148,64,60,0.32)); }
+.finance-value-label { paint-order: stroke; stroke: rgba(255,255,255,0.92); stroke-width: 4px; fill: var(--primary-950); font-size: 10px; font-weight: 950; }
+.finance-value-label.profit { fill: #4c201e; }
 .finance-legend { position: static; margin-top: 10px; }
 .finance-table.compact { margin-top: 6px; }
 .finance-table { display: grid; gap: 8px; }
@@ -400,5 +404,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr; }
 }
 `;
+
+
 
 

@@ -216,16 +216,8 @@ export const APP_JS = String.raw`
 
   function FinancePreview(props) {
     var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
-    var visibleRows = rows.slice(0, props && props.expanded ? 10 : 6);
-    var content = rows.length ? h(React.Fragment, null,
-      h(FinanceLineChart, { rows: visibleRows }),
-      h("div", { className: "finance-table compact" },
-        h("div", { className: "finance-row head" }, h("span", null, "회사"), h("span", null, "매출액"), h("span", null, "영업이익"), h("span", null, "기준")),
-        visibleRows.map(function (row) {
-          return h("div", { className: "finance-row", key: row.company + row.year + row.reportCode }, h("span", { className: "profit-name" }, row.company), h("span", null, formatAmount(row.revenue)), h("span", null, formatAmount(row.operatingProfit)), h("span", null, row.year + " " + reportCodeLabel(row.reportCode)));
-        })
-      )
-    ) : h(FinancePlaceholderChart, null);
+    var visibleRows = rows.slice(0, 10);
+    var content = rows.length ? h(FinanceLineChart, { rows: visibleRows }) : h(FinancePlaceholderChart, null);
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, rows.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
       content
@@ -235,8 +227,8 @@ export const APP_JS = String.raw`
   function FinanceLineChart(props) {
     var rows = props.rows || [];
     var width = 720;
-    var height = 260;
-    var pad = { left: 42, right: 24, top: 22, bottom: 58 };
+    var height = 330;
+    var pad = { left: 42, right: 24, top: 42, bottom: 78 };
     var innerW = width - pad.left - pad.right;
     var innerH = height - pad.top - pad.bottom;
     var maxRevenue = rows.reduce(function (max, row) { return Math.max(max, Math.abs(Number(row.revenue || 0))); }, 1);
@@ -245,7 +237,7 @@ export const APP_JS = String.raw`
     function y(value, max) { return pad.top + innerH - Math.max(0, Math.min(1, Math.abs(Number(value || 0)) / max)) * innerH; }
     function points(key, max) { return rows.map(function (row, index) { return x(index) + "," + y(row[key], max); }).join(" "); }
     return h("div", { className: "finance-line-card" },
-      h("div", { className: "finance-line-note" }, "회사별 비교가 잘 보이도록 매출액과 영업이익은 각각 최대값 대비 비율로 표시합니다."),
+      h("div", { className: "finance-line-note" }, "회사별 매출액과 영업이익을 함께 비교합니다. 숫자는 실제 금액, 선은 각각 최대값 대비 비율입니다."),
       h("svg", { className: "finance-line-chart", viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": "상위사 매출액과 영업이익 비교 그래프" },
         [0, 0.25, 0.5, 0.75, 1].map(function (tick) {
           var yPos = pad.top + innerH - tick * innerH;
@@ -257,10 +249,16 @@ export const APP_JS = String.raw`
         h("polyline", { points: points("revenue", maxRevenue), className: "finance-polyline revenue" }),
         h("polyline", { points: points("operatingProfit", maxProfit), className: "finance-polyline profit" }),
         rows.map(function (row, index) {
-          return h("g", { key: "point-" + row.company },
-            h("circle", { cx: x(index), cy: y(row.revenue, maxRevenue), r: 4.5, className: "finance-dot revenue" }),
-            h("circle", { cx: x(index), cy: y(row.operatingProfit, maxProfit), r: 4.5, className: "finance-dot profit" }),
-            h("text", { x: x(index), y: height - 31, className: "finance-company-label", textAnchor: "end", transform: "rotate(-28 " + x(index) + " " + (height - 31) + ")" }, row.company)
+          var xPos = x(index);
+          var revenueY = y(row.revenue, maxRevenue);
+          var profitY = y(row.operatingProfit, maxProfit);
+          var isDongA = row.company === "동아에스티";
+          return h("g", { key: "point-" + row.company, className: isDongA ? "finance-point highlight" : "finance-point" },
+            h("circle", { cx: xPos, cy: revenueY, r: isDongA ? 6 : 4.5, className: "finance-dot revenue" }),
+            h("circle", { cx: xPos, cy: profitY, r: isDongA ? 6 : 4.5, className: "finance-dot profit" }),
+            h("text", { x: xPos, y: Math.max(14, revenueY - 11), className: "finance-value-label revenue", textAnchor: "middle" }, formatAmount(row.revenue)),
+            h("text", { x: xPos, y: Math.min(height - pad.bottom - 4, profitY + 18), className: "finance-value-label profit", textAnchor: "middle" }, formatAmount(row.operatingProfit)),
+            h("text", { x: xPos, y: height - 42, className: isDongA ? "finance-company-label highlight" : "finance-company-label", textAnchor: "end", transform: "rotate(-28 " + xPos + " " + (height - 42) + ")" }, row.company)
           );
         })
       ),
@@ -283,7 +281,11 @@ export const APP_JS = String.raw`
       if (item.account_name === "매출액" || item.account_name === "영업수익") grouped[key].revenue = item.amount;
       if (item.account_name === "영업이익") grouped[key].operatingProfit = item.amount;
     });
-    return Object.values(grouped).sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0); });
+    return Object.values(grouped).sort(function (a, b) {
+      if (a.company === "동아에스티") return -1;
+      if (b.company === "동아에스티") return 1;
+      return (b.revenue || 0) - (a.revenue || 0);
+    });
   }
 
 
@@ -295,7 +297,11 @@ export const APP_JS = String.raw`
       var currentScore = Number(current.year || 0) * 10 + reportCodeRank(current.reportCode);
       return rowScore > currentScore ? row : current;
     }, null);
-    return rows.filter(function (row) { return row.year === best.year && row.reportCode === best.reportCode; }).sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0); });
+    return rows.filter(function (row) { return row.year === best.year && row.reportCode === best.reportCode; }).sort(function (a, b) {
+      if (a.company === "동아에스티") return -1;
+      if (b.company === "동아에스티") return 1;
+      return (b.revenue || 0) - (a.revenue || 0);
+    });
   }
 
   function reportCodeRank(code) {
@@ -1147,5 +1153,6 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
