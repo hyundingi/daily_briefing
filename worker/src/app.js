@@ -3,6 +3,7 @@ export const APP_JS = String.raw`
   var h = React.createElement;
   var TODAY = new Date().toISOString().slice(0, 10);
   var COMPANIES = ["전체", "동아에스티", "한미약품", "종근당", "유한양행", "녹십자", "제일약품", "대웅제약", "보령", "JW중외제약", "일동제약"];
+  var FINANCIAL_COMPANIES = COMPANIES.slice(1);
   var COMPANY_COLORS = {
     "동아에스티": "#2f6fb3",
     "한미약품": "#c45636",
@@ -215,22 +216,36 @@ export const APP_JS = String.raw`
   }
 
   function FinancePreview(props) {
-    var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
+    var basisState = React.useState("latest");
+    var selectedBasis = basisState[0];
+    var setSelectedBasis = basisState[1];
+    var allRows = financialRows(props && props.financials ? props.financials : []);
+    var basisOptions = financialBasisOptions(allRows);
+    var selected = financialRowsByBasis(allRows, selectedBasis);
+    var rows = selected.rows;
     var visibleRows = rows.slice(0, 10);
-    var content = rows.length ? h(FinanceLineChart, { rows: visibleRows }) : h(FinancePlaceholderChart, null);
+    var content = h(FinanceLineChart, { rows: visibleRows });
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, rows.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
+      h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: selected.basis ? selected.basis.label : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
+      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selectedBasis, setSelectedBasis: setSelectedBasis }),
       content
     ));
   }
 
   function FinancePage(props) {
-    var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
-    var basis = rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API";
-    var actions = props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, rows.length ? "재무 다시 수집" : "DART 재무 수집")] : null;
+    var basisState = React.useState("latest");
+    var selectedBasis = basisState[0];
+    var setSelectedBasis = basisState[1];
+    var allRows = financialRows(props && props.financials ? props.financials : []);
+    var basisOptions = financialBasisOptions(allRows);
+    var selected = financialRowsByBasis(allRows, selectedBasis);
+    var rows = selected.rows;
+    var basis = selected.basis ? selected.basis.label : "DART 재무 API";
+    var actions = props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null;
     return h("section", { className: "panel finance-page" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "재무비교", subtitle: "회사별 주요 재무계정을 표로 비교합니다. 단위는 억 원입니다.", pill: basis, actions: actions }),
-      rows.length ? h("div", { className: "finance-detail-table-wrap" },
+      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selectedBasis, setSelectedBasis: setSelectedBasis }),
+      h("div", { className: "finance-detail-table-wrap" },
         h("table", { className: "finance-detail-table" },
           h("thead", null, h("tr", null,
             h("th", null, "회사"),
@@ -256,8 +271,20 @@ export const APP_JS = String.raw`
             );
           }))
         )
-      ) : h(FinancePlaceholderChart, null)
+      )
     ));
+  }
+
+  function FinanceBasisToolbar(props) {
+    var options = props.basisOptions || [];
+    return h("div", { className: "finance-basis-toolbar" },
+      h("label", { className: "finance-basis-label" }, "기준"),
+      h("select", { className: "finance-basis-select", value: props.selectedBasis || "latest", onChange: function (event) { props.setSelectedBasis(event.target.value); } },
+        h("option", { value: "latest" }, options.length ? "가장 최신 기준" : "데이터 없음"),
+        options.map(function (option) { return h("option", { key: option.key, value: option.key }, option.label); })
+      ),
+      h("span", { className: "finance-basis-help" }, options.length ? "선택 기준에 데이터가 없는 회사는 0으로 표시됩니다." : "재무 데이터를 수집하면 기준을 선택할 수 있습니다.")
+    );
   }
 
   function FinanceLineChart(props) {
@@ -313,35 +340,65 @@ export const APP_JS = String.raw`
     var grouped = {};
     items.forEach(function (item) {
       var key = item.company + ":" + item.fiscal_year + ":" + item.report_code;
-      if (!grouped[key]) grouped[key] = { company: item.company, year: item.fiscal_year, reportCode: item.report_code, revenue: null, operatingProfit: null, netIncome: null, assets: null, liabilities: null, equity: null };
-      if (item.account_name === "매출액" || item.account_name === "영업수익") grouped[key].revenue = item.amount;
-      if (item.account_name === "영업이익") grouped[key].operatingProfit = item.amount;
-      if (item.account_name === "당기순이익") grouped[key].netIncome = item.amount;
-      if (item.account_name === "자산총계") grouped[key].assets = item.amount;
-      if (item.account_name === "부채총계") grouped[key].liabilities = item.amount;
-      if (item.account_name === "자본총계") grouped[key].equity = item.amount;
+      if (!grouped[key]) grouped[key] = { company: item.company, year: item.fiscal_year, reportCode: item.report_code, revenue: 0, operatingProfit: 0, netIncome: 0, assets: 0, liabilities: 0, equity: 0 };
+      if (item.account_name === "매출액" || item.account_name === "영업수익") grouped[key].revenue = Number(item.amount || 0);
+      if (item.account_name === "영업이익") grouped[key].operatingProfit = Number(item.amount || 0);
+      if (item.account_name === "당기순이익") grouped[key].netIncome = Number(item.amount || 0);
+      if (item.account_name === "자산총계") grouped[key].assets = Number(item.amount || 0);
+      if (item.account_name === "부채총계") grouped[key].liabilities = Number(item.amount || 0);
+      if (item.account_name === "자본총계") grouped[key].equity = Number(item.amount || 0);
     });
-    return Object.values(grouped).sort(function (a, b) {
-      if (a.company === "동아에스티") return -1;
-      if (b.company === "동아에스티") return 1;
-      return (b.revenue || 0) - (a.revenue || 0);
-    });
+    return Object.values(grouped).sort(compareFinancialCompanies);
   }
 
+  function financialBasisOptions(rows) {
+    var map = {};
+    rows.forEach(function (row) {
+      var key = financialBasisKey(row);
+      if (!map[key]) map[key] = { key: key, year: row.year, reportCode: row.reportCode, label: row.year + " " + reportCodeLabel(row.reportCode), score: financialBasisScore(row) };
+    });
+    return Object.values(map).sort(function (a, b) { return b.score - a.score; });
+  }
+
+  function financialRowsByBasis(rows, selectedBasis) {
+    var options = financialBasisOptions(rows);
+    var basis = options[0] || null;
+    if (selectedBasis && selectedBasis !== "latest") {
+      basis = options.filter(function (option) { return option.key === selectedBasis; })[0] || basis;
+    }
+    var selectedRows = basis ? rows.filter(function (row) { return financialBasisKey(row) === basis.key; }) : [];
+    return { basis: basis, rows: completeFinancialRows(selectedRows, basis) };
+  }
+
+  function completeFinancialRows(rows, basis) {
+    return FINANCIAL_COMPANIES.map(function (company) {
+      var found = rows.filter(function (row) { return row.company === company; })[0];
+      if (found) return Object.assign({}, found, {
+        revenue: Number(found.revenue || 0),
+        operatingProfit: Number(found.operatingProfit || 0),
+        netIncome: Number(found.netIncome || 0),
+        assets: Number(found.assets || 0),
+        liabilities: Number(found.liabilities || 0),
+        equity: Number(found.equity || 0)
+      });
+      return { company: company, year: basis ? basis.year : "", reportCode: basis ? basis.reportCode : "", revenue: 0, operatingProfit: 0, netIncome: 0, assets: 0, liabilities: 0, equity: 0 };
+    }).sort(compareFinancialCompanies);
+  }
+
+  function compareFinancialCompanies(a, b) {
+    return FINANCIAL_COMPANIES.indexOf(a.company) - FINANCIAL_COMPANIES.indexOf(b.company);
+  }
+
+  function financialBasisKey(row) {
+    return (row.year || "") + ":" + (row.reportCode || "");
+  }
+
+  function financialBasisScore(row) {
+    return Number(row.year || 0) * 10 + reportCodeRank(row.reportCode);
+  }
 
   function latestFinancialRows(rows) {
-    if (!rows.length) return [];
-    var best = rows.reduce(function (current, row) {
-      if (!current) return row;
-      var rowScore = Number(row.year || 0) * 10 + reportCodeRank(row.reportCode);
-      var currentScore = Number(current.year || 0) * 10 + reportCodeRank(current.reportCode);
-      return rowScore > currentScore ? row : current;
-    }, null);
-    return rows.filter(function (row) { return row.year === best.year && row.reportCode === best.reportCode; }).sort(function (a, b) {
-      if (a.company === "동아에스티") return -1;
-      if (b.company === "동아에스티") return 1;
-      return (b.revenue || 0) - (a.revenue || 0);
-    });
+    return financialRowsByBasis(rows, "latest").rows;
   }
 
   function reportCodeRank(code) {
@@ -1224,6 +1281,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
