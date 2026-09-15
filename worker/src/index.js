@@ -96,9 +96,13 @@ export default {
       if (request.method === "GET" && url.pathname === "/api/calendar") return jsonResponse(await calendarEvents(env));
       if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env, "", { excludeSource: "NTIS", limit: 500 }));
       if (request.method === "GET" && url.pathname === "/api/rd/projects") return jsonResponse(await rdProjectsFromD1(env, url.searchParams));
-      if (request.method === "GET" && url.pathname === "/api/archive") return jsonResponse(await archiveIndex(env));
+      if (request.method === "GET" && url.pathname === "/api/archive") {
+        const archiveId = url.searchParams.get("id");
+        if (archiveId) return jsonResponse(await archiveBriefing(env, archiveId));
+        return jsonResponse(await archiveIndex(env));
+      }
       if (request.method === "GET" && url.pathname.startsWith("/api/archive/")) {
-        const date = url.pathname.split("/").pop();
+        const date = decodeURIComponent(url.pathname.split("/").pop());
         return jsonResponse(await archiveBriefing(env, date));
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
@@ -822,7 +826,7 @@ function calendarEventFromGoogle(item) {
   };
 }
 async function archiveIndexFromD1(env) {
-  const rows = await env.DB.prepare(`SELECT r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, r.summary_json, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
+  const rows = await env.DB.prepare(`SELECT r.id, r.newsletter_date AS date, r.sent_at AS updated_at, r.subject, r.summary_json, SUM(CASE WHEN i.item_type = 'disclosure' THEN 1 ELSE 0 END) AS disclosure_count, SUM(CASE WHEN i.item_type = 'news' THEN 1 ELSE 0 END) AS news_count
     FROM newsletter_runs r LEFT JOIN newsletter_items i ON r.id = i.run_id
     WHERE r.sent_at IS NOT NULL
     GROUP BY r.id
@@ -830,15 +834,15 @@ async function archiveIndexFromD1(env) {
     LIMIT 120`).all();
   return (rows.results || []).map((row) => {
     const summary = parseJson(row.summary_json, {});
-    return { date: row.date, updated_at: row.updated_at, subject: row.subject || `${row.date} 뉴스레터`, disclosure_count: row.disclosure_count || summary.disclosure_count || 0, news_count: row.news_count || summary.news_count || 0 };
+    return { id: row.id, date: row.date, updated_at: row.updated_at, subject: row.subject || `${row.date} 뉴스레터`, disclosure_count: row.disclosure_count || summary.disclosure_count || 0, news_count: row.news_count || summary.news_count || 0 };
   });
 }
 
 async function archiveBriefingFromD1(env, date) {
-  const run = await env.DB.prepare("SELECT * FROM newsletter_runs WHERE newsletter_date = ? AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 1").bind(date).first();
+  const run = await env.DB.prepare("SELECT * FROM newsletter_runs WHERE (id = ? OR newsletter_date = ?) AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 1").bind(date, date).first();
   if (!run) return emptyBriefing();
   const items = await env.DB.prepare("SELECT * FROM newsletter_items WHERE run_id = ? ORDER BY company ASC, title ASC").bind(run.id).all();
-  return { ok: true, date, updated_at: run.sent_at, newsletter: { subject: run.subject, html: run.html, summary: parseJson(run.summary_json, {}) }, items: items.results || [], disclosures: [], news: [], analysis: parseJson(run.summary_json, {}), summary: { disclosure_count: 0, news_count: 0, important_disclosure_count: 0, important_news_count: 0 } };
+  return { ok: true, id: run.id, date: run.newsletter_date, updated_at: run.sent_at, newsletter: { id: run.id, date: run.newsletter_date, subject: run.subject, html: run.html, summary: parseJson(run.summary_json, {}) }, items: items.results || [], disclosures: [], news: [], analysis: parseJson(run.summary_json, {}), summary: { disclosure_count: 0, news_count: 0, important_disclosure_count: 0, important_news_count: 0 } };
 }
 
 async function cleanupOldData(env, now) {
@@ -2263,6 +2267,10 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
+
+
 
 
 

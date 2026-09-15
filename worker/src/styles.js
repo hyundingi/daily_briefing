@@ -408,7 +408,12 @@ button { border: 0; cursor: pointer; }
 .archive-list { display: grid; gap: 10px; }
 .archive-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); }
 .ghost-button { padding: 9px 12px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 12px; font-weight: 900; }
-.archive-frame { width: 100%; min-height: 720px; border: 0; border-radius: 22px; background: #fff; margin-top: 14px; }
+.archive-frame { width: 100%; min-height: 72vh; border: 0; border-radius: 22px; background: #fff; }
+.archive-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 28px; background: rgba(36,32,32,0.42); backdrop-filter: blur(10px); }
+.archive-modal { width: min(920px, 100%); max-height: 92vh; display: grid; grid-template-rows: auto minmax(0, 1fr); border-radius: 28px; background: rgba(255,255,255,0.96); border: 1px solid rgba(234,223,221,0.9); box-shadow: 0 28px 80px rgba(36,32,32,0.24); overflow: hidden; }
+.archive-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(135deg, rgba(248,232,231,0.82), rgba(255,255,255,0.92)); }
+.archive-modal-head strong { color: var(--primary-900); font-size: 15px; font-weight: 950; }
+.archive-modal .archive-frame { min-height: 0; height: 78vh; border-radius: 0; }
 
 .ticker {
   position: fixed;
@@ -461,6 +466,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr; }
 }
 `;
+
 
 
 
