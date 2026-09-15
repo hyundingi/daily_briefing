@@ -377,8 +377,12 @@ async function refreshFinancialMetrics(request, env) {
   await requireUpdatePassword(request, env);
   if (!env.DB) return jsonResponse({ ok: false, error: "D1 DB가 연결되어 있지 않습니다." }, 503);
   const diagnostics = [];
+  const body = await request.json().catch(() => ({}));
   const nowText = kstTimestamp(new Date());
-  const collected = await collectFinancialMetrics(env, diagnostics);
+  const collected = await collectFinancialMetrics(env, diagnostics, {
+    fiscalYear: clean(body && body.fiscal_year),
+    reportCode: clean(body && body.report_code),
+  });
   const fresh = await filterNewRows(env.DB, "financial_metrics", collected, financialMetricKey);
   const statements = collected.map((item) => financialMetricStatement(env, item, nowText));
   if (statements.length) await env.DB.batch(statements);
@@ -1193,13 +1197,14 @@ async function collectGovernmentProjects(env, diagnostics) {
   return dedupe(rows, governmentProjectKey).sort(compareGovernmentProjects).slice(0, MAX_STORED_ITEMS);
 }
 
-async function collectFinancialMetrics(env, diagnostics) {
+async function collectFinancialMetrics(env, diagnostics, options = {}) {
   if (!env.DART_API_KEY) {
     diagnostics.push({ step: "dart_financials", status: "missing_secret" });
     return [];
   }
-  const fiscalYear = clean(env.DART_FINANCIAL_YEAR) || String(new Date().getFullYear() - 1);
-  const reportCode = clean(env.DART_FINANCIAL_REPORT_CODE) || "11011";
+  const defaultBasis = defaultFinancialReportBasis();
+  const fiscalYear = clean(options.fiscalYear) || defaultBasis.fiscalYear;
+  const reportCode = clean(options.reportCode) || defaultBasis.reportCode;
   const rows = [];
   for (const company of TARGET_COMPANIES) {
     const url = new URL(DART_FINANCIAL_URL);
@@ -1239,6 +1244,15 @@ async function collectFinancialMetrics(env, diagnostics) {
   return dedupe(rows, financialMetricKey);
 }
 
+function defaultFinancialReportBasis(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date).split("-").map(Number);
+  const year = parts[0];
+  const monthDay = parts[1] * 100 + parts[2];
+  if (monthDay >= 1115) return { fiscalYear: String(year), reportCode: "11014" };
+  if (monthDay >= 815) return { fiscalYear: String(year), reportCode: "11012" };
+  if (monthDay >= 515) return { fiscalYear: String(year), reportCode: "11013" };
+  return { fiscalYear: String(year - 1), reportCode: "11011" };
+}
 function isCoreFinancialAccount(accountName) {
   return ["매출액", "영업수익", "영업이익", "당기순이익", "자산총계", "부채총계", "자본총계"].includes(accountName);
 }
@@ -2249,6 +2263,11 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
+
+
+
+
 
 
 

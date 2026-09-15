@@ -216,35 +216,35 @@ export const APP_JS = String.raw`
   }
 
   function FinancePreview(props) {
-    var basisState = React.useState("latest");
+    var basisState = React.useState("");
     var selectedBasis = basisState[0];
     var setSelectedBasis = basisState[1];
     var allRows = financialRows(props && props.financials ? props.financials : []);
     var basisOptions = financialBasisOptions(allRows);
-    var selected = financialRowsByBasis(allRows, selectedBasis);
+    var selected = financialRowsByBasis(allRows, selectedBasis || (basisOptions[0] && basisOptions[0].key) || "");
     var rows = selected.rows;
     var visibleRows = rows.slice(0, 10);
     var content = h(FinanceLineChart, { rows: visibleRows });
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "상위사 실적비교", subtitle: "DART 단일회사 주요계정 API 기준으로 매출액과 영업이익을 비교합니다.", pill: selected.basis ? selected.basis.label : "DART 재무 API", actions: props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null }),
-      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selectedBasis, setSelectedBasis: setSelectedBasis }),
+      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selected.basis ? selected.basis.key : "", setSelectedBasis: setSelectedBasis }),
       content
     ));
   }
 
   function FinancePage(props) {
-    var basisState = React.useState("latest");
+    var basisState = React.useState("");
     var selectedBasis = basisState[0];
     var setSelectedBasis = basisState[1];
     var allRows = financialRows(props && props.financials ? props.financials : []);
     var basisOptions = financialBasisOptions(allRows);
-    var selected = financialRowsByBasis(allRows, selectedBasis);
+    var selected = financialRowsByBasis(allRows, selectedBasis || (basisOptions[0] && basisOptions[0].key) || "");
     var rows = selected.rows;
     var basis = selected.basis ? selected.basis.label : "DART 재무 API";
     var actions = props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, basisOptions.length ? "재무 다시 수집" : "DART 재무 수집")] : null;
     return h("section", { className: "panel finance-page" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "재무비교", subtitle: "회사별 주요 재무계정을 표로 비교합니다. 단위는 억 원입니다.", pill: basis, actions: actions }),
-      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selectedBasis, setSelectedBasis: setSelectedBasis }),
+      h(FinanceBasisToolbar, { basisOptions: basisOptions, selectedBasis: selected.basis ? selected.basis.key : "", setSelectedBasis: setSelectedBasis }),
       h("div", { className: "finance-detail-table-wrap" },
         h("table", { className: "finance-detail-table" },
           h("thead", null, h("tr", null,
@@ -279,9 +279,8 @@ export const APP_JS = String.raw`
     var options = props.basisOptions || [];
     return h("div", { className: "finance-basis-toolbar" },
       h("label", { className: "finance-basis-label" }, "기준"),
-      h("select", { className: "finance-basis-select", value: props.selectedBasis || "latest", onChange: function (event) { props.setSelectedBasis(event.target.value); } },
-        h("option", { value: "latest" }, options.length ? "가장 최신 기준" : "데이터 없음"),
-        options.map(function (option) { return h("option", { key: option.key, value: option.key }, option.label); })
+      h("select", { className: "finance-basis-select", value: props.selectedBasis || "", onChange: function (event) { props.setSelectedBasis(event.target.value); }, disabled: !options.length },
+        options.length ? options.map(function (option) { return h("option", { key: option.key, value: option.key }, option.label); }) : h("option", { value: "" }, "데이터 없음")
       ),
       h("span", { className: "finance-basis-help" }, options.length ? "선택 기준에 데이터가 없는 회사는 0으로 표시됩니다." : "재무 데이터를 수집하면 기준을 선택할 수 있습니다.")
     );
@@ -363,7 +362,7 @@ export const APP_JS = String.raw`
   function financialRowsByBasis(rows, selectedBasis) {
     var options = financialBasisOptions(rows);
     var basis = options[0] || null;
-    if (selectedBasis && selectedBasis !== "latest") {
+    if (selectedBasis) {
       basis = options.filter(function (option) { return option.key === selectedBasis; })[0] || basis;
     }
     var selectedRows = basis ? rows.filter(function (row) { return financialBasisKey(row) === basis.key; }) : [];
@@ -398,7 +397,7 @@ export const APP_JS = String.raw`
   }
 
   function latestFinancialRows(rows) {
-    return financialRowsByBasis(rows, "latest").rows;
+    return financialRowsByBasis(rows, "").rows;
   }
 
   function reportCodeRank(code) {
@@ -1281,6 +1280,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 
