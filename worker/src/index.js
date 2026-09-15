@@ -968,7 +968,7 @@ function governmentProjectKey(item) {
 
 async function financialMetricsFromD1(env) {
   if (!env.DB) return [];
-  const rows = await env.DB.prepare("SELECT * FROM financial_metrics ORDER BY fiscal_year DESC, report_code DESC, company ASC, account_name ASC LIMIT 300").all();
+  const rows = await env.DB.prepare("SELECT * FROM financial_metrics ORDER BY fiscal_year DESC, report_code DESC, company ASC, account_name ASC LIMIT 1000").all();
   return (rows.results || []).map(financialMetricFromDb);
 }
 
@@ -2263,6 +2263,7 @@ function renderPage() {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+
 
 
 
