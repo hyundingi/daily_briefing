@@ -622,7 +622,11 @@ export const APP_JS = String.raw`
         .then(function (res) { return res.json(); })
         .then(function (json) { props.setSelectedArchive(json); });
     }
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "뉴스레터 아카이브", subtitle: "실제로 발송했던 뉴스레터 전문을 다시 확인합니다." }), h("div", { className: "archive-list" }, props.archives.length ? props.archives.map(function (row) { var date = row.date || row.run_date || row.id; return h("div", { className: "archive-row", key: date }, h("div", null, h("strong", null, date), h("p", { className: "mini-text" }, "공시 " + (row.disclosure_count || 0) + "건 · 뉴스 " + (row.news_count || 0) + "건")), h("button", { className: "ghost-button", onClick: function () { openArchive(date); } }, "보기")); }) : h("div", { className: "empty" }, "저장된 뉴스레터가 없습니다.")), props.selectedArchive ? h("iframe", { className: "archive-frame", title: "newsletter archive", srcDoc: archiveHtml(props.selectedArchive) }) : null));
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "뉴스레터 아카이브", subtitle: "실제로 발송했던 뉴스레터 전문을 다시 확인합니다." }), h("div", { className: "archive-list" }, props.archives.length ? props.archives.map(function (row) { var date = row.date || row.run_date || row.id; var opened = archiveDate(props.selectedArchive) === date; return h("div", { className: "archive-item", key: date }, h("div", { className: "archive-row" }, h("div", null, h("strong", null, date), h("p", { className: "mini-text" }, "공시 " + (row.disclosure_count || 0) + "건 · 뉴스 " + (row.news_count || 0) + "건")), h("button", { className: "ghost-button", onClick: function () { openArchive(date); } }, opened ? "닫기" : "보기")), opened ? h("iframe", { className: "archive-frame", title: "newsletter archive", srcDoc: archiveHtml(props.selectedArchive) }) : null); }) : h("div", { className: "empty" }, "저장된 뉴스레터가 없습니다."))));
+  }
+
+  function archiveDate(archive) {
+    return (archive && archive.date) || (archive && archive.newsletter && archive.newsletter.date) || "";
   }
 
   function archiveHtml(archive) {
@@ -1355,6 +1359,8 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
+
 
 
 
