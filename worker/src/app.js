@@ -154,7 +154,7 @@ export const APP_JS = String.raw`
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: disclosureCompany, setCompany: setDisclosureCompany, query: disclosureQuery, setQuery: setDisclosureQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, rawItems: news, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
-        !loading && active === "finance" ? h(FinancePreview, { financials: financials, expanded: true, onRefresh: refreshFinancials }) : null,
+        !loading && active === "finance" ? h(FinancePage, { financials: financials, onRefresh: refreshFinancials }) : null,
         !loading && active === "profit" ? h(ProfitPanel, null) : null,
         !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
         !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
@@ -224,6 +224,42 @@ export const APP_JS = String.raw`
     ));
   }
 
+  function FinancePage(props) {
+    var rows = latestFinancialRows(financialRows(props && props.financials ? props.financials : []));
+    var basis = rows.length ? rows[0].year + " " + reportCodeLabel(rows[0].reportCode) : "DART 재무 API";
+    var actions = props && props.onRefresh ? [h("button", { className: "ghost-button", onClick: props.onRefresh }, rows.length ? "재무 다시 수집" : "DART 재무 수집")] : null;
+    return h("section", { className: "panel finance-page" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "재무비교", subtitle: "회사별 주요 재무계정을 표로 비교합니다. 단위는 억 원입니다.", pill: basis, actions: actions }),
+      rows.length ? h("div", { className: "finance-detail-table-wrap" },
+        h("table", { className: "finance-detail-table" },
+          h("thead", null, h("tr", null,
+            h("th", null, "회사"),
+            h("th", null, "매출액"),
+            h("th", null, "영업이익"),
+            h("th", null, "당기순이익"),
+            h("th", null, "자산총계"),
+            h("th", null, "부채총계"),
+            h("th", null, "자본총계"),
+            h("th", null, "부채비율")
+          )),
+          h("tbody", null, rows.map(function (row) {
+            var isDongA = row.company === "동아에스티";
+            return h("tr", { key: "finance-detail-" + row.company, className: isDongA ? "highlight" : "" },
+              h("td", { className: "company-cell" }, row.company),
+              h("td", null, formatAmountShort(row.revenue)),
+              h("td", null, formatAmountShort(row.operatingProfit)),
+              h("td", null, formatAmountShort(row.netIncome)),
+              h("td", null, formatAmountShort(row.assets)),
+              h("td", null, formatAmountShort(row.liabilities)),
+              h("td", null, formatAmountShort(row.equity)),
+              h("td", null, formatRatio(row.liabilities, row.equity))
+            );
+          }))
+        )
+      ) : h(FinancePlaceholderChart, null)
+    ));
+  }
+
   function FinanceLineChart(props) {
     var rows = props.rows || [];
     var width = 760;
@@ -277,9 +313,13 @@ export const APP_JS = String.raw`
     var grouped = {};
     items.forEach(function (item) {
       var key = item.company + ":" + item.fiscal_year + ":" + item.report_code;
-      if (!grouped[key]) grouped[key] = { company: item.company, year: item.fiscal_year, reportCode: item.report_code, revenue: null, operatingProfit: null };
+      if (!grouped[key]) grouped[key] = { company: item.company, year: item.fiscal_year, reportCode: item.report_code, revenue: null, operatingProfit: null, netIncome: null, assets: null, liabilities: null, equity: null };
       if (item.account_name === "매출액" || item.account_name === "영업수익") grouped[key].revenue = item.amount;
       if (item.account_name === "영업이익") grouped[key].operatingProfit = item.amount;
+      if (item.account_name === "당기순이익") grouped[key].netIncome = item.amount;
+      if (item.account_name === "자산총계") grouped[key].assets = item.amount;
+      if (item.account_name === "부채총계") grouped[key].liabilities = item.amount;
+      if (item.account_name === "자본총계") grouped[key].equity = item.amount;
     });
     return Object.values(grouped).sort(function (a, b) {
       if (a.company === "동아에스티") return -1;
@@ -311,6 +351,19 @@ export const APP_JS = String.raw`
     if (value === null || value === undefined || value === "") return "-";
     var billion = Math.round(Number(value) / 100000000);
     return billion.toLocaleString("ko-KR") + "억";
+  }
+
+  function formatAmountShort(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    var billion = Math.round(Number(value) / 100000000);
+    return billion.toLocaleString("ko-KR");
+  }
+
+  function formatRatio(numerator, denominator) {
+    var n = Number(numerator || 0);
+    var d = Number(denominator || 0);
+    if (!d) return "-";
+    return (n / d * 100).toFixed(1) + "%";
   }
 
   function reportCodeLabel(code) {
@@ -1153,6 +1206,7 @@ function projectLink(item) {
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 `;
+
 
 
 

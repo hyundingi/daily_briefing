@@ -192,6 +192,15 @@ button { border: 0; cursor: pointer; }
 .finance-value-label { paint-order: stroke; stroke: rgba(255,255,255,0.92); stroke-width: 4px; fill: var(--primary-950); font-size: 9px; font-weight: 900; }
 .finance-value-label.profit { fill: #4c201e; }
 .finance-legend { position: static; margin-top: 10px; }
+.finance-detail-table-wrap { overflow-x: auto; border: 1px solid rgba(234,223,221,0.86); border-radius: 22px; background: rgba(255,255,255,0.72); }
+.finance-detail-table { width: 100%; min-width: 920px; border-collapse: collapse; font-size: 13px; }
+.finance-detail-table th, .finance-detail-table td { padding: 13px 14px; border-bottom: 1px solid rgba(234,223,221,0.74); text-align: right; white-space: nowrap; }
+.finance-detail-table th:first-child, .finance-detail-table td:first-child { text-align: left; position: sticky; left: 0; background: rgba(255,255,255,0.96); }
+.finance-detail-table th { background: var(--primary-50); color: var(--primary-900); font-size: 12px; font-weight: 950; }
+.finance-detail-table tbody tr:last-child td { border-bottom: 0; }
+.finance-detail-table tbody tr:hover td { background: rgba(248,232,231,0.38); }
+.finance-detail-table tr.highlight td { background: rgba(230,173,170,0.22); font-weight: 950; color: var(--primary-950); }
+.finance-detail-table .company-cell { color: var(--primary-900); font-weight: 950; }
 .finance-table.compact { margin-top: 6px; }
 .finance-table { display: grid; gap: 8px; }
 .finance-row {
@@ -404,6 +413,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr; }
 }
 `;
+
 
 
 
