@@ -138,6 +138,7 @@ export const APP_JS = String.raw`
     var news = sortItems((data && data.news) || []);
     var grants = ((data && data.government_projects) || []).slice().sort(compareGrants);
     var financials = (data && data.financial_metrics) || [];
+    var managementReports = (data && data.management_reports) || {};
     var calendarEvents = (data && data.calendar_events) || [];
     var calendarStatus = (data && data.calendar_status) || {};
     var todayDisclosures = disclosures.filter(function (item) { return sameDay(item); });
@@ -151,13 +152,13 @@ export const APP_JS = String.raw`
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
         loading ? h("div", { className: "empty" }, "데이터를 불러오는 중입니다.") : null,
-        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive, refreshFinancials: refreshFinancials }) : null,
+        !loading && active === "dashboard" ? h(Dashboard, { data: data, disclosures: disclosures, news: news, grants: grants, financials: financials, managementReports: managementReports, calendarEvents: calendarEvents, calendarStatus: calendarStatus, todayDisclosures: todayDisclosures, todayNews: todayNews, setActive: setActive, refreshFinancials: refreshFinancials }) : null,
         !loading && active === "disclosures" ? h(DataPage, { title: "공시", subtitle: "저장된 공시를 시간순으로 확인합니다.", items: filteredDisclosures, type: "disclosure", company: disclosureCompany, setCompany: setDisclosureCompany, query: disclosureQuery, setQuery: setDisclosureQuery }) : null,
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, rawItems: news, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
         !loading && active === "finance" ? h(FinancePage, { financials: financials, onRefresh: refreshFinancials }) : null,
-        !loading && active === "profit" ? h(ProfitPanel, null) : null,
-        !loading && active === "cash" ? h(ComingSoon, { title: "자금현황", text: "가용 현금, 월별 지출 계획, 주요 입출금 예정액을 정리할 영역입니다." }) : null,
+        !loading && active === "profit" ? h(ProfitPanel, { report: managementReports.profit, editable: true, onUploaded: loadLatest }) : null,
+        !loading && active === "cash" ? h(CashPanel, { report: managementReports.cash, editable: true, onUploaded: loadLatest }) : null,
         !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
         !loading && active === "grants" ? h(GrantsPage, { grants: grants }) : null,
         h("div", { className: adminOpen ? "hidden-admin open" : "hidden-admin" },
@@ -182,7 +183,7 @@ export const APP_JS = String.raw`
           h("span", { className: "nav-icon" }, item[1]), h("span", { className: "nav-label" }, item[2])
         );
       })),
-      h("div", { className: "side-note" }, h("p", { className: "side-note-title" }, "운영 메모"), h("p", { className: "side-note-text" }, "내부 실적·일정·엑셀 업로드는 로그인/접근제어를 먼저 켠 뒤 연결하는 것을 권장합니다."))
+      h("div", { className: "side-note" }, h("p", { className: "side-note-title" }, "운영 메모"), h("p", { className: "side-note-text" }, "손익·자금현황은 전용 탭에서 빈 양식을 내려받아 갱신할 수 있습니다. 실제 사내 값을 올리기 전 Access를 설정해주세요."))
     );
   }
 
@@ -205,7 +206,7 @@ export const APP_JS = String.raw`
         h(KpiCard, { label: "오늘 일정", value: props.calendarEvents.length, unit: "건", foot: props.calendarStatus && props.calendarStatus.configured ? "Google Calendar" : "캘린더 설정 전" })
       ),
       h("section", { className: "dashboard-grid" },
-        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials, onRefresh: props.refreshFinancials }), h(ProfitPanel, null), h(CashPanel, null)),
+        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials, onRefresh: props.refreshFinancials }), h(ProfitPanel, { report: props.managementReports && props.managementReports.profit }), h(CashPanel, { report: props.managementReports && props.managementReports.cash })),
         h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
@@ -502,17 +503,15 @@ export const APP_JS = String.raw`
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "사업부문 실적 요약", subtitle: "엑셀 업로드 데이터와 연결할 자리입니다." }), h("div", { className: "division-grid" }, rows.map(function (row) { return h("article", { className: "division-card", key: row[0] }, h("p", { className: "division-name" }, row[0]), h("p", { className: "division-value" }, row[1]), h("p", { className: "division-note" }, row[2])); }))));
   }
 
-  function ProfitPanel() {
-    var rows = [
-      ["전사", "9월 예상", "128.4억", "18.6억", "14.5%", "주요 품목 매출 반영 시 전월 대비 소폭 개선 가능성이 있습니다."],
-      ["ETC", "누적", "72.1억", "12.8억", "17.8%", "기존 주력 품목 흐름이 유지되는지가 핵심입니다."],
-      ["글로벌", "누적", "34.7억", "4.1억", "11.8%", "수출·파트너 매출 인식 시점에 따라 변동성이 큽니다."],
-      ["DH", "누적", "21.6억", "1.7억", "7.9%", "초기 투자비 부담이 있어 매출 전환 속도를 봐야 합니다."]
-    ];
+  function ProfitPanel(props) {
+    var report = props && props.report;
+    var rows = report && Array.isArray(report.rows) ? report.rows : [];
+    var actions = props && props.editable ? [h(ReportUploadActions, { type: "profit", onUploaded: props.onUploaded })] : null;
     return h("section", { className: "panel" },
       h("div", { className: "panel-inner" },
-        h(PanelHead, { title: "손익", subtitle: "전사 예상 실적과 사업부문별 누적 실적을 표로 확인합니다.", pill: "샘플 데이터" }),
-        h("div", { className: "profit-table" },
+        h(PanelHead, { title: "손익", subtitle: "전사 예상 실적과 사업부문별 누적 실적을 표로 확인합니다.", pill: report ? report.report_period : "업로드 전", actions: actions }),
+        report ? h("p", { className: "report-meta" }, "업로드 " + formatDateTime(report.created_at) + (report.source_filename ? " · " + report.source_filename : "")) : null,
+        rows.length ? h("div", { className: "profit-table" },
           h("div", { className: "profit-row head" },
             h("span", null, "구분"),
             h("span", null, "기준"),
@@ -521,22 +520,96 @@ export const APP_JS = String.raw`
             h("span", null, "이익률")
           ),
           rows.map(function (row) {
-            return h("div", { className: "profit-row", key: row[0] + row[1] },
-              h("span", { className: "profit-name" }, row[0]),
-              h("span", null, row[1]),
-              h("span", null, row[2]),
-              h("span", null, row[3]),
-              h("span", null, row[4]),
-              h("p", { className: "profit-comment" }, row[5])
+            return h("div", { className: "profit-row", key: row.division + row.basis },
+              h("span", { className: "profit-name" }, row.division),
+              h("span", null, row.basis),
+              h("span", null, formatMoney(row.revenue)),
+              h("span", null, formatMoney(row.operating_profit)),
+              h("span", null, row.margin === null || row.margin === undefined ? "-" : Number(row.margin).toFixed(1) + "%"),
+              row.comment ? h("p", { className: "profit-comment" }, row.comment) : null
             );
           })
-        )
+        ) : h(ReportEmptyState, { type: "profit", editable: props && props.editable })
       )
     );
   }
 
-  function CashPanel() {
-    return h("section", { className: "panel" }, h("div", { className: "panel-inner" }, h(PanelHead, { title: "자금현황", subtitle: "가용 현금과 월별 주요 자금 흐름을 정리할 영역입니다.", pill: "연동 예정" }), h("div", { className: "cash-grid" }, h("article", null, h("span", null, "가용 현금"), h("strong", null, "245억")), h("article", null, h("span", null, "이번 달 예정 지출"), h("strong", null, "38억")), h("article", null, h("span", null, "확인 필요"), h("strong", null, "2건")))));
+  function CashPanel(props) {
+    var report = props && props.report;
+    var rows = report && Array.isArray(report.rows) ? report.rows : [];
+    var summary = report && report.summary ? report.summary : {};
+    var actions = props && props.editable ? [h(ReportUploadActions, { type: "cash", onUploaded: props.onUploaded })] : null;
+    return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+      h(PanelHead, { title: "자금현황", subtitle: "가용 현금과 예정된 주요 자금 흐름을 확인합니다.", pill: report ? report.report_period : "업로드 전", actions: actions }),
+      report ? h("p", { className: "report-meta" }, "업로드 " + formatDateTime(report.created_at) + (report.source_filename ? " · " + report.source_filename : "")) : null,
+      rows.length ? h(React.Fragment, null,
+        h("div", { className: "cash-grid" },
+          h("article", null, h("span", null, "가용 현금"), h("strong", null, formatMoney(summary.available_cash))),
+          h("article", null, h("span", null, "유입 예정"), h("strong", null, formatMoney(summary.scheduled_inflow))),
+          h("article", null, h("span", null, "지출 예정"), h("strong", null, formatMoney(summary.scheduled_outflow))),
+          h("article", null, h("span", null, "확인 필요"), h("strong", null, formatNumber(summary.attention_count) + "건"))
+        ),
+        h("div", { className: "cash-table" },
+          h("div", { className: "cash-row head" }, h("span", null, "구분"), h("span", null, "항목"), h("span", null, "금액"), h("span", null, "예정일"), h("span", null, "상태")),
+          rows.map(function (row, index) {
+            return h("div", { className: "cash-row", key: row.category + row.account + index },
+              h("span", { className: "profit-name" }, row.category),
+              h("span", null, row.account || "-"),
+              h("span", null, formatMoney(row.amount)),
+              h("span", null, row.due_date || "-"),
+              h("span", null, row.status || "-"),
+              row.note ? h("p", { className: "profit-comment" }, row.note) : null
+            );
+          })
+        )
+      ) : h(ReportEmptyState, { type: "cash", editable: props && props.editable })
+    )));
+  }
+
+  function ReportEmptyState(props) {
+    var label = props.type === "profit" ? "손익" : "자금현황";
+    return h("div", { className: "report-empty" },
+      h("strong", null, label + " 데이터가 아직 없습니다."),
+      h("p", null, props.editable ? "상단에서 빈 양식을 내려받아 값을 입력한 뒤 업로드해주세요." : "전용 탭에서 양식을 내려받고 최신 보고서를 업로드할 수 있습니다.")
+    );
+  }
+
+  function ReportUploadActions(props) {
+    var busyState = React.useState(false);
+    var busy = busyState[0];
+    var setBusy = busyState[1];
+    var label = props.type === "profit" ? "손익" : "자금현황";
+    function upload(event) {
+      var file = event.target.files && event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      if (!/\.(xlsx|csv)$/i.test(file.name)) { window.alert("xlsx 또는 csv 파일만 업로드할 수 있습니다."); return; }
+      var password = window.prompt("관리자 비밀번호를 입력해주세요.");
+      if (!password) return;
+      setBusy(true);
+      file.arrayBuffer().then(function (buffer) {
+        return fetch("/api/management/import/" + props.type, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-Update-Password": password },
+          body: buffer
+        });
+      }).then(function (res) {
+        return res.json().then(function (json) { return { ok: res.ok, json: json }; });
+      }).then(function (result) {
+        if (!result.ok) throw new Error(result.json.error || "업로드에 실패했습니다.");
+        window.alert(label + " " + result.json.row_count + "개 행을 저장했습니다.");
+        if (props.onUploaded) props.onUploaded();
+      }).catch(function (error) {
+        window.alert(error.message || String(error));
+      }).finally(function () { setBusy(false); });
+    }
+    return h("div", { className: "report-actions" },
+      h("a", { className: "ghost-button", href: "/api/management/template/" + props.type }, "빈 양식 받기"),
+      h("label", { className: busy ? "ghost-button upload-button disabled" : "ghost-button upload-button" },
+        busy ? "업로드 중…" : "엑셀 업로드",
+        h("input", { type: "file", accept: ".xlsx,.csv", disabled: busy, onChange: upload })
+      )
+    );
   }
 
   function SchedulePage(props) {

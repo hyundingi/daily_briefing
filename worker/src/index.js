@@ -1,4 +1,4 @@
-import { strFromU8, unzipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { APP_JS } from "./app.js";
 import { renderPage as renderReactPage } from "./page.js";
 import { APP_CSS } from "./styles.js";
@@ -94,6 +94,8 @@ export default {
       if (request.method === "GET" && url.pathname === "/api/latest") return jsonResponse(await latestBriefing(env));
       if (request.method === "GET" && url.pathname === "/api/financials") return jsonResponse(await financialMetricsFromD1(env));
       if (request.method === "GET" && url.pathname === "/api/calendar") return jsonResponse(await calendarEvents(env));
+      if (request.method === "GET" && url.pathname === "/api/management/reports") return jsonResponse(await managementReportsFromD1(env));
+      if (request.method === "GET" && url.pathname.startsWith("/api/management/template/")) return managementTemplateResponse(url.pathname.split("/").pop());
       if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env, "", { excludeSource: "NTIS", limit: 500 }));
       if (request.method === "GET" && url.pathname === "/api/rd/projects") return jsonResponse(await rdProjectsFromD1(env, url.searchParams));
       if (request.method === "GET" && url.pathname === "/api/archive") {
@@ -107,6 +109,7 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
       if (request.method === "POST" && url.pathname === "/api/financials/refresh") return await refreshFinancialMetrics(request, env);
+      if (request.method === "POST" && url.pathname.startsWith("/api/management/import/")) return await importManagementReport(request, env, url.pathname.split("/").pop());
       if (request.method === "POST" && url.pathname === "/api/grants/refresh") return await refreshGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/import") return await importGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/rd/strategy") return await rdStrategyAnalysis(request, env);
@@ -656,6 +659,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const newsRows = await env.DB.prepare("SELECT * FROM news_articles WHERE first_seen_at >= ? ORDER BY published_at DESC, company ASC").bind(cutoff).all();
   const governmentProjects = await governmentProjectsFromD1(env, cutoff, { excludeSource: "NTIS", limit: 500 });
   const financialMetrics = await financialMetricsFromD1(env);
+  const managementReports = await managementReportsFromD1(env);
   const calendar = await calendarEvents(env, diagnostics);
   const itemSummaries = await itemSummariesFromD1(env);
   const disclosures = attachItemSummaries((disclosureRows.results || []).map(disclosureFromDb), itemSummaries);
@@ -668,6 +672,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
     news,
     government_projects: governmentProjects,
     financial_metrics: financialMetrics,
+    management_reports: managementReports,
     calendar_events: calendar.events,
     calendar_status: calendar.status,
     analysis: {},
@@ -974,6 +979,275 @@ async function financialMetricsFromD1(env) {
   if (!env.DB) return [];
   const rows = await env.DB.prepare("SELECT * FROM financial_metrics ORDER BY fiscal_year DESC, report_code DESC, company ASC, account_name ASC LIMIT 1000").all();
   return (rows.results || []).map(financialMetricFromDb);
+}
+
+async function managementReportsFromD1(env) {
+  if (!env.DB) return { profit: null, cash: null };
+  const rows = await env.DB.prepare("SELECT * FROM management_reports ORDER BY created_at DESC LIMIT 100").all();
+  const result = { profit: null, cash: null };
+  for (const row of rows.results || []) {
+    if (!Object.prototype.hasOwnProperty.call(result, row.report_type) || result[row.report_type]) continue;
+    result[row.report_type] = Object.assign({
+      id: row.id,
+      report_type: row.report_type,
+      report_period: row.report_period,
+      report_date: row.report_date || "",
+      source_filename: row.source_filename || "",
+      created_at: row.created_at
+    }, parseJson(row.data_json, {}));
+  }
+  return result;
+}
+
+async function importManagementReport(request, env, type) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 데이터베이스가 연결되지 않았습니다." }, 503);
+  if (!["profit", "cash"].includes(type)) return jsonResponse({ ok: false, error: "지원하지 않는 보고서 종류입니다." }, 400);
+  const length = Number(request.headers.get("content-length") || 0);
+  if (length > 5 * 1024 * 1024) return jsonResponse({ ok: false, error: "파일은 5MB 이하만 업로드할 수 있습니다." }, 413);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length) return jsonResponse({ ok: false, error: "업로드한 파일이 비어 있습니다." }, 400);
+  const encodedName = request.headers.get("x-file-name") || type + ".xlsx";
+  let filename = encodedName;
+  try { filename = decodeURIComponent(encodedName); } catch (_) {}
+  const parsed = parseManagementFile(bytes, type, filename);
+  const now = kstTimestamp(new Date());
+  const id = type + ":" + new Date().toISOString() + ":" + crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO management_reports (id, report_type, report_period, report_date, source_filename, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, type, parsed.report_period, parsed.report_date || "", filename.slice(0, 240), JSON.stringify(parsed), now)
+    .run();
+  return jsonResponse({ ok: true, id, report_type: type, report_period: parsed.report_period, row_count: parsed.rows.length, created_at: now });
+}
+
+function managementTemplateResponse(type) {
+  if (!["profit", "cash"].includes(type)) return jsonResponse({ ok: false, error: "지원하지 않는 양식입니다." }, 404);
+  const bytes = buildManagementWorkbook(type);
+  const filename = type === "profit" ? "손익_업로드_양식.xlsx" : "자금현황_업로드_양식.xlsx";
+  return new Response(bytes, {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(filename),
+      "Cache-Control": "no-store"
+    }
+  });
+}
+
+function buildManagementWorkbook(type) {
+  const rows = type === "profit"
+    ? [
+        ["경영기획팀 Insight Board - 손익 업로드 양식"],
+        ["안내", "금액은 원 단위 숫자로 입력하고 열 제목과 순서를 변경하지 마세요."],
+        ["보고기간", ""],
+        [],
+        ["사업부문", "기준", "매출액(원)", "영업이익(원)", "코멘트"],
+        ["전사", "예상", "", "", ""],
+        ["ETC", "누적", "", "", ""],
+        ["글로벌", "누적", "", "", ""],
+        ["DH", "누적", "", "", ""]
+      ]
+    : [
+        ["경영기획팀 Insight Board - 자금현황 업로드 양식"],
+        ["안내", "금액은 원 단위 숫자로 입력하고 열 제목과 순서를 변경하지 마세요."],
+        ["기준일", ""],
+        [],
+        ["구분", "계정/항목", "금액(원)", "예정일", "상태", "비고"],
+        ["가용현금", "", "", "", "정상", ""],
+        ["유입예정", "", "", "", "예정", ""],
+        ["지출예정", "", "", "", "예정", ""]
+      ];
+  const sheetRows = rows.map(function (row, r) {
+    return '<row r="' + (r + 1) + '">' + row.map(function (value, c) { return xlsxInlineCell(c, r, value); }).join("") + "</row>";
+  }).join("");
+  const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="25" customWidth="1"/><col min="3" max="6" width="18" customWidth="1"/></cols><sheetData>' + sheetRows + "</sheetData></worksheet>";
+  const files = {
+    "[Content_Types].xml": strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'),
+    "_rels/.rels": strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    "xl/workbook.xml": strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' + (type === "profit" ? "손익" : "자금현황") + '" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+    "xl/_rels/workbook.xml.rels": strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
+    "xl/worksheets/sheet1.xml": strToU8(worksheet)
+  };
+  return zipSync(files, { level: 6 });
+}
+
+function xlsxInlineCell(column, row, value) {
+  const ref = xlsxColumnName(column) + (row + 1);
+  const text = escapeXml(String(value == null ? "" : value));
+  return '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + text + "</t></is></c>";
+}
+
+function xlsxColumnName(index) {
+  let value = index + 1;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + value % 26) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+function parseManagementFile(bytes, type, filename) {
+  const lower = String(filename || "").toLowerCase();
+  const rows = lower.endsWith(".csv") || !isZip(bytes) ? parseCsvRows(strFromU8(bytes)) : parseXlsxRows(bytes);
+  if (!rows.length) throw Object.assign(new Error("엑셀에서 읽을 수 있는 데이터가 없습니다."), { status: 400 });
+  return type === "profit" ? normalizeProfitReport(rows) : normalizeCashReport(rows);
+}
+
+function parseXlsxRows(bytes) {
+  const files = unzipSync(bytes);
+  const sheetName = Object.keys(files).find(function (name) { return /^xl\/worksheets\/sheet\d+\.xml$/i.test(name); });
+  if (!sheetName) throw Object.assign(new Error("엑셀 첫 번째 시트를 찾을 수 없습니다."), { status: 400 });
+  const shared = parseSharedStrings(files["xl/sharedStrings.xml"]);
+  const xml = strFromU8(files[sheetName]);
+  const rows = [];
+  for (const rowMatch of xml.matchAll(/<row\b[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/gi)) {
+    const rowIndex = Number(rowMatch[1]) - 1;
+    const row = [];
+    for (const cellMatch of rowMatch[2].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gi)) {
+      const attrs = cellMatch[1];
+      const body = cellMatch[2];
+      const ref = (attrs.match(/\br="([A-Z]+\d+)"/i) || [])[1] || "";
+      const column = xlsxColumnIndex(ref.replace(/\d+/g, ""));
+      const cellType = (attrs.match(/\bt="([^"]+)"/i) || [])[1] || "";
+      const inline = Array.from(body.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/gi)).map(function (match) { return decodeEntities(match[1]); }).join("");
+      const raw = (body.match(/<v>([\s\S]*?)<\/v>/i) || [])[1] || "";
+      row[column] = cellType === "s" ? (shared[Number(raw)] || "") : (cellType === "inlineStr" || cellType === "str" ? inline : decodeEntities(raw));
+    }
+    rows[rowIndex] = row;
+  }
+  return rows.map(function (row) { return row || []; });
+}
+
+function parseSharedStrings(bytes) {
+  if (!bytes) return [];
+  const xml = strFromU8(bytes);
+  return Array.from(xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/gi)).map(function (match) {
+    return Array.from(match[1].matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/gi)).map(function (part) { return decodeEntities(part[1]); }).join("");
+  });
+}
+
+function xlsxColumnIndex(name) {
+  let value = 0;
+  for (const char of String(name || "").toUpperCase()) value = value * 26 + char.charCodeAt(0) - 64;
+  return Math.max(0, value - 1);
+}
+
+function parseCsvRows(text) {
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '"' && quoted && source[i + 1] === '"') { cell += '"'; i += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (char === "," && !quoted) { row.push(cell); cell = ""; }
+    else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && source[i + 1] === "\n") i += 1;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += char;
+  }
+  row.push(cell);
+  if (row.some(function (value) { return String(value).trim(); })) rows.push(row);
+  return rows;
+}
+
+function normalizeProfitReport(rows) {
+  const header = findHeaderRow(rows, ["사업부문", "매출액", "영업이익"]);
+  const periodRow = rows.find(function (row) { return clean(row[0]).includes("보고기간"); }) || [];
+  const reportPeriod = clean(periodRow[1]);
+  if (!reportPeriod) throw Object.assign(new Error("보고기간을 입력해주세요. 예: 2026년 9월 예상"), { status: 400 });
+  const dataRows = rows.slice(header + 1).map(function (row, index) {
+    const division = clean(row[0]);
+    if (!division) return null;
+    const revenue = parseReportAmount(row[2]);
+    const operatingProfit = parseReportAmount(row[3]);
+    return {
+      division,
+      basis: clean(row[1]) || "누적",
+      revenue,
+      operating_profit: operatingProfit,
+      margin: revenue ? operatingProfit / revenue * 100 : null,
+      comment: clean(row[4]),
+      sort_order: index
+    };
+  }).filter(Boolean);
+  if (!dataRows.length) throw Object.assign(new Error("손익 데이터 행을 한 건 이상 입력해주세요."), { status: 400 });
+  return { report_period: reportPeriod, report_date: normalizeReportDate(reportPeriod), rows: dataRows };
+}
+
+function normalizeCashReport(rows) {
+  const header = findHeaderRow(rows, ["구분", "금액"]);
+  const periodRow = rows.find(function (row) { return clean(row[0]).includes("기준일"); }) || [];
+  const reportPeriod = clean(periodRow[1]);
+  if (!reportPeriod) throw Object.assign(new Error("기준일을 입력해주세요. 예: 2026-09-30"), { status: 400 });
+  const dataRows = rows.slice(header + 1).map(function (row, index) {
+    const category = clean(row[0]);
+    const account = clean(row[1]);
+    if (!category && !account) return null;
+    return {
+      category: category || "기타",
+      account,
+      amount: parseReportAmount(row[2]),
+      due_date: normalizeReportDate(row[3]),
+      status: clean(row[4]),
+      note: clean(row[5]),
+      sort_order: index
+    };
+  }).filter(Boolean);
+  if (!dataRows.length) throw Object.assign(new Error("자금현황 데이터 행을 한 건 이상 입력해주세요."), { status: 400 });
+  const sum = function (name) { return dataRows.filter(function (row) { return row.category.includes(name); }).reduce(function (total, row) { return total + row.amount; }, 0); };
+  return {
+    report_period: reportPeriod,
+    report_date: normalizeReportDate(reportPeriod),
+    rows: dataRows,
+    summary: {
+      available_cash: sum("가용"),
+      scheduled_inflow: sum("유입"),
+      scheduled_outflow: sum("지출"),
+      attention_count: dataRows.filter(function (row) { return /확인|미정|지연|주의/.test(row.status + " " + row.note); }).length
+    }
+  };
+}
+
+function findHeaderRow(rows, required) {
+  const index = rows.findIndex(function (row) {
+    const text = (row || []).map(clean).join(" ");
+    return required.every(function (word) { return text.includes(word); });
+  });
+  if (index < 0) throw Object.assign(new Error("필수 열(" + required.join(", ") + ")을 찾을 수 없습니다. 제공된 양식을 사용해주세요."), { status: 400 });
+  return index;
+}
+
+function parseReportAmount(value) {
+  const text = clean(value).replaceAll(",", "").replaceAll("원", "").replace(/\s/g, "");
+  if (!text) return 0;
+  const match = text.match(/-?[\d.]+/);
+  if (!match) throw Object.assign(new Error("금액 '" + text + "'을 숫자로 읽을 수 없습니다."), { status: 400 });
+  let number = Number(match[0]);
+  if (/조/.test(text)) number *= 1000000000000;
+  else if (/억/.test(text)) number *= 100000000;
+  else if (/만/.test(text)) number *= 10000;
+  return Math.round(number);
+}
+
+function normalizeReportDate(value) {
+  const text = clean(value);
+  if (!text) return "";
+  if (/^\d{5}(?:\.\d+)?$/.test(text)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Number(text) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+  const match = text.match(/(20\d{2})\D*(\d{1,2})?\D*(\d{1,2})?/);
+  if (!match) return text;
+  const month = match[2] ? String(match[2]).padStart(2, "0") : "01";
+  const day = match[3] ? String(match[3]).padStart(2, "0") : "01";
+  return match[1] + "-" + month + "-" + day;
+}
+
+function escapeXml(value) {
+  return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
 function financialMetricFromDb(row) {
@@ -2167,6 +2441,7 @@ function emptyBriefing() {
     news: [],
     government_projects: [],
     financial_metrics: [],
+    management_reports: { profit: null, cash: null },
     analysis: {},
     summary: { disclosure_count: 0, news_count: 0, government_project_count: 0, financial_metric_count: 0, important_disclosure_count: 0, important_news_count: 0 },
   };

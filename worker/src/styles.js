@@ -261,10 +261,23 @@ button { border: 0; cursor: pointer; }
 .profit-row:not(.head) span { font-size: 13px; font-weight: 800; }
 .profit-name { color: var(--primary-900); font-weight: 950 !important; }
 .profit-comment { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.cash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.report-meta { margin: -8px 0 14px; color: var(--muted); font-size: 11px; font-weight: 750; }
+.report-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.report-actions .ghost-button { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.upload-button { position: relative; overflow: hidden; }
+.upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.upload-button.disabled { opacity: 0.55; cursor: wait; }
+.report-empty { min-height: 150px; display: grid; place-content: center; gap: 7px; padding: 24px; border: 1px dashed rgba(148,64,60,0.28); border-radius: 22px; background: rgba(248,232,231,0.34); text-align: center; }
+.report-empty strong { color: var(--primary-900); font-size: 15px; }
+.report-empty p { max-width: 420px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.cash-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
 .cash-grid article { padding: 15px; border-radius: 18px; background: rgba(248,232,231,0.52); }
 .cash-grid span { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 850; }
 .cash-grid strong { color: var(--primary-900); font-size: 24px; letter-spacing: -0.04em; }
+.cash-table { display: grid; gap: 8px; }
+.cash-row { display: grid; grid-template-columns: 100px minmax(130px, 1.5fr) minmax(90px, 1fr) 110px 80px; gap: 10px; align-items: center; padding: 13px 14px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.72); }
+.cash-row.head { background: var(--primary-50); color: var(--primary-900); font-size: 12px; font-weight: 950; }
+.cash-row:not(.head) span { min-width: 0; font-size: 13px; font-weight: 800; }
 
 .intel-list, .data-list { display: grid; gap: 12px; }
 .news-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -462,7 +475,8 @@ button { border: 0; cursor: pointer; }
   .grant-filter-group, .grant-search-group { width: 100%; justify-content: flex-start; margin-left: 0; }
   .grant-grid.expanded, .trend-list.expanded, .trend-grid, .rd-analysis-grid, .rd-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grant-filter-group .field, .grant-search { width: 100%; }
-  .profit-row { grid-template-columns: 1fr 1fr; }
+  .profit-row, .cash-row { grid-template-columns: 1fr 1fr; }
+  .report-actions { width: 100%; }
   .finance-row { grid-template-columns: 1fr; }
 }
 `;
