@@ -563,7 +563,7 @@ export const APP_JS = String.raw`
           })
         )
       ) : h(ReportEmptyState, { type: "cash", editable: props && props.editable })
-    )));
+    ));
   }
 
   function ReportEmptyState(props) {
