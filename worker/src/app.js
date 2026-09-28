@@ -766,6 +766,9 @@ export const APP_JS = String.raw`
     var topicState = React.useState("전체");
     var topic = topicState[0];
     var setTopic = topicState[1];
+    var sortState = React.useState("deadline");
+    var sort = sortState[0];
+    var setSort = sortState[1];
     var closedState = React.useState(false);
     var includeClosed = closedState[0];
     var setIncludeClosed = closedState[1];
@@ -775,7 +778,7 @@ export const APP_JS = String.raw`
     var allGrants = props && props.grants ? props.grants : [];
     var sources = ["전체"].concat(uniqueGrantValues(allGrants, "source"));
     var topics = ["전체"].concat(uniqueGrantValues(allGrants, "category"));
-    var filtered = filterGrants(allGrants, { query: search, source: source, topic: topic, includeClosed: includeClosed });
+    var filtered = filterGrants(allGrants, { query: search, source: source, topic: topic, includeClosed: includeClosed, sort: sort });
     var pageSize = 16;
     var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     var safePage = Math.min(page, totalPages);
@@ -789,11 +792,15 @@ export const APP_JS = String.raw`
       };
     }
     return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-      h(PanelHead, { title: "국책과제 공고", subtitle: "기업마당·K-Startup·IRIS·KHIDI 등 신청 가능한 공고를 마감일 가까운 순으로 봅니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("grants"); } }, "전체보기")] : null }),
+      h(PanelHead, { title: "국책과제 공고", subtitle: "기업마당·K-Startup·IRIS·KHIDI 등 신청 가능한 공고를 모아 매일 오전 7시 30분에 자동 갱신합니다.", pill: props && props.expanded && filtered.length ? filtered.length + "건" : null, actions: props && !props.expanded && props.setActive ? [h("button", { className: "ghost-button", onClick: function () { props.setActive("grants"); } }, "전체보기")] : null }),
       props && props.expanded ? h("div", { className: "grant-toolbar" },
         h("div", { className: "grant-filter-group" },
           h("select", { className: "field", value: source, onChange: resetPage(function (event) { setSource(event.target.value); }) }, sources.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 사이트" : name); })),
           h("select", { className: "field", value: topic, onChange: resetPage(function (event) { setTopic(event.target.value); }) }, topics.map(function (name) { return h("option", { key: name, value: name }, name === "전체" ? "전체 분류" : name); })),
+          h("select", { className: "field", value: sort, onChange: resetPage(function (event) { setSort(event.target.value); }) }, [
+            h("option", { value: "deadline" }, "마감임박순"),
+            h("option", { value: "recent" }, "최근 공고순")
+          ]),
           h("label", { className: "check-field" }, h("input", { type: "checkbox", checked: includeClosed, onChange: resetPage(function (event) { setIncludeClosed(event.target.checked); }) }), h("span", null, "마감 공고 포함"))
         ),
         h("div", { className: "grant-search-group" },
@@ -1359,6 +1366,7 @@ function projectLink(item) {
     var query = typeof options === "string" ? options : (options && options.query) || "";
     var source = options && options.source ? options.source : "전체";
     var topic = options && options.topic ? options.topic : "전체";
+    var sort = options && options.sort ? options.sort : "deadline";
     var includeClosed = !!(options && options.includeClosed);
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
@@ -1367,7 +1375,24 @@ function projectLink(item) {
       var openOk = includeClosed || isOpenGrant(item);
       var text = [item.source, item.title, item.agency, item.category, item.summary, item.budget, item.target, item.keywords, item.deadline].join(" ").toLowerCase();
       return sourceOk && topicOk && openOk && (!needle || text.indexOf(needle) >= 0);
-    }).sort(compareGrants);
+    }).sort(compareGrantOrder(sort));
+  }
+
+  function compareGrantOrder(sort) {
+    if (sort === "recent") {
+      return function (a, b) {
+        var difference = grantPublishedValue(b) - grantPublishedValue(a);
+        return difference || compareGrants(a, b);
+      };
+    }
+    return compareGrants;
+  }
+
+  function grantPublishedValue(item) {
+    var raw = String((item && (item.announcement_date || item.published_at || item.first_seen_at || item.last_seen_at)) || "");
+    if (/^\d{8}$/.test(raw)) raw = raw.slice(0, 4) + "-" + raw.slice(4, 6) + "-" + raw.slice(6, 8);
+    var value = new Date(raw).getTime();
+    return isNaN(value) ? 0 : value;
   }
 
   function paginationNumbers(current, total) {
