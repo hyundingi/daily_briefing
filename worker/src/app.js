@@ -19,8 +19,6 @@ export const APP_JS = String.raw`
   var NAV_ITEMS = [
     ["dashboard", "⌂", "대시보드"],
     ["finance", "⌁", "재무비교"],
-    ["profit", "▦", "손익"],
-    ["cash", "₩", "자금현황"],
     ["schedule", "◇", "일정"],
     ["grants", "✦", "국책과제"],
     ["disclosures", "□", "공시"],
@@ -206,7 +204,7 @@ export const APP_JS = String.raw`
         h(KpiCard, { label: "오늘 일정", value: props.calendarEvents.length, unit: "건", foot: props.calendarStatus && props.calendarStatus.configured ? "Google Calendar" : "캘린더 설정 전" })
       ),
       h("section", { className: "dashboard-grid" },
-        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials, onRefresh: props.refreshFinancials }), h(ProfitPanel, { report: props.managementReports && props.managementReports.profit }), h(CashPanel, { report: props.managementReports && props.managementReports.cash })),
+        h("div", { className: "stack" }, h(FinancePreview, { financials: props.financials, onRefresh: props.refreshFinancials })),
         h("div", { className: "stack" }, h(SchedulePanel, { featured: true, events: props.calendarEvents, status: props.calendarStatus }), h(GrantPanel, { grants: props.grants, setActive: props.setActive }), h(IntelligencePanel, { disclosures: props.disclosures, news: props.news, setActive: props.setActive }))
       )
     );
@@ -766,7 +764,7 @@ export const APP_JS = String.raw`
     var topicState = React.useState("전체");
     var topic = topicState[0];
     var setTopic = topicState[1];
-    var sortState = React.useState("deadline");
+    var sortState = React.useState("recent");
     var sort = sortState[0];
     var setSort = sortState[1];
     var closedState = React.useState(false);
@@ -1366,7 +1364,7 @@ function projectLink(item) {
     var query = typeof options === "string" ? options : (options && options.query) || "";
     var source = options && options.source ? options.source : "전체";
     var topic = options && options.topic ? options.topic : "전체";
-    var sort = options && options.sort ? options.sort : "deadline";
+    var sort = options && options.sort ? options.sort : "recent";
     var includeClosed = !!(options && options.includeClosed);
     var needle = String(query || "").toLowerCase().trim();
     return items.filter(function (item) {
