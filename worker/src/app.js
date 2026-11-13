@@ -679,32 +679,32 @@ export const APP_JS = String.raw`
     var hovered = hoverState[0];
     var setHovered = hoverState[1];
     if (!rows.length) return h("div", { className: "empty compact" }, "선택한 조건의 실적 데이터가 없습니다.");
-    var nodes = packIndustryNodes(rows);
+    var maximum = Math.max.apply(null, rows.map(function (row) { return row.total.actual || 0; }).concat([1]));
     return h("div", { className: "industry-bubble-map" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
-      h("div", { className: "bubble-canvas" }, nodes.map(function (node) {
+      h("div", { className: "bubble-grid" }, rows.map(function (node) {
+        var diameter = Math.round(46 + Math.sqrt(Math.max(0, Number(node.total.actual || 0)) / maximum) * 102);
         var style = {
-          left: (node.x / 1100 * 100) + "%",
-          top: (node.y / 520 * 100) + "%",
-          width: (node.radius * 2) + "px",
-          height: (node.radius * 2) + "px",
+          width: diameter + "px",
+          height: diameter + "px",
           background: industryBubbleBackground(node, props.segment)
         };
-        return h("button", {
-          key: node.company,
-          type: "button",
-          className: node.company === "동아ST" ? "industry-bubble donga" : "industry-bubble",
-          style: style,
-          onMouseEnter: function () { setHovered(node); },
-          onMouseLeave: function () { setHovered(null); },
-          onFocus: function () { setHovered(node); },
-          onBlur: function () { setHovered(null); },
-          onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
-          "aria-label": node.company + " 실적 상세 보기"
-        },
-          node.radius >= 44 ? h("span", null, node.company) : null
+        return h("article", { className: "bubble-tile", key: node.company },
+          h("button", {
+            type: "button",
+            className: "industry-bubble",
+            style: style,
+            onMouseEnter: function () { setHovered(node); },
+            onMouseLeave: function () { setHovered(null); },
+            onFocus: function () { setHovered(node); },
+            onBlur: function () { setHovered(null); },
+            onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
+            "aria-label": node.company + " 실적 상세 보기"
+          }),
+          h("strong", { className: node.company === "동아ST" ? "bubble-company-name donga" : "bubble-company-name" }, node.company),
+          hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true }) : null
         );
-      }), hovered ? h(IndustryBubbleTooltip, { node: hovered }) : null)
+      }))
     );
   }
 
@@ -734,54 +734,13 @@ export const APP_JS = String.raw`
   function IndustryLegend(props) {
     return h("div", { className: "industry-chart-legend" },
       props.stacked ? h(React.Fragment, null,
-        h("span", null, h("i", { className: "etc" }), "ETC"),
-        h("span", null, h("i", { className: "otc" }), "OTC"),
-        h("span", null, h("i", { className: "export" }), "수출"),
-        h("span", null, h("i", { className: "other" }), "기타")
+        h("span", null, h("i", { style: { backgroundColor: segmentColor("ETC") } }), "ETC"),
+        h("span", null, h("i", { style: { backgroundColor: segmentColor("OTC") } }), "OTC"),
+        h("span", null, h("i", { style: { backgroundColor: segmentColor("수출") } }), "수출"),
+        h("span", null, h("i", { style: { backgroundColor: segmentColor("기타") } }), "기타")
       ) : h("span", null, h("i", { className: "actual" }), "실제 실적"),
       props.withoutTarget ? null : h("span", null, h("i", { className: "target" }), props.stacked ? "총 목표" : "목표")
     );
-  }
-
-  function packIndustryNodes(rows) {
-    var maximum = Math.max.apply(null, rows.map(function (row) { return row.total.actual || 0; }).concat([1]));
-    var nodes = rows.map(function (row, index) {
-      var value = Math.max(0, Number(row.total.actual || 0));
-      var radius = 23 + Math.sqrt(value / maximum) * 68;
-      var angle = index * 2.3999632297;
-      var distance = 18 * Math.sqrt(index);
-      return Object.assign({}, row, {
-        radius: radius,
-        x: 550 + Math.cos(angle) * distance,
-        y: 255 + Math.sin(angle) * distance
-      });
-    });
-    for (var step = 0; step < 180; step += 1) {
-      for (var left = 0; left < nodes.length; left += 1) {
-        for (var right = left + 1; right < nodes.length; right += 1) {
-          var a = nodes[left];
-          var b = nodes[right];
-          var dx = b.x - a.x;
-          var dy = b.y - a.y;
-          var distance = Math.sqrt(dx * dx + dy * dy) || 0.01;
-          var minimum = a.radius + b.radius + 8;
-          if (distance < minimum) {
-            var push = (minimum - distance) / 2;
-            var nx = dx / distance;
-            var ny = dy / distance;
-            a.x -= nx * push;
-            a.y -= ny * push;
-            b.x += nx * push;
-            b.y += ny * push;
-          }
-        }
-      }
-      nodes.forEach(function (node) {
-        node.x = Math.max(node.radius + 8, Math.min(1100 - node.radius - 8, node.x));
-        node.y = Math.max(node.radius + 8, Math.min(520 - node.radius - 8, node.y));
-      });
-    }
-    return nodes;
   }
 
   function industryBubbleBackground(node, segment) {
@@ -802,7 +761,7 @@ export const APP_JS = String.raw`
 
   function IndustryBubbleTooltip(props) {
     var node = props.node;
-    return h("div", { className: "industry-bubble-tooltip", style: { left: (node.x / 1100 * 100) + "%", top: (node.y / 520 * 100) + "%" } },
+    return h("div", { className: props.inline ? "industry-bubble-tooltip inline" : "industry-bubble-tooltip" },
       h("strong", null, node.company),
       h("p", null, "실적 " + formatIndustryNumber(node.total.actual)),
       h("p", null, "목표 " + formatIndustryNumber(node.total.target) + " · 달성률 " + formatIndustryPercent(node.total.actual, node.total.target)),
