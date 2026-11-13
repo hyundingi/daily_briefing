@@ -765,7 +765,7 @@ export const APP_JS = String.raw`
       cursor += Math.max(0, Number(node.segments[name] || 0)) / total * 100;
       return segmentColor(name) + " " + start.toFixed(2) + "% " + cursor.toFixed(2) + "%";
     });
-    return "conic-gradient(" + stops.join(",") + ")";
+    return "linear-gradient(90deg, " + stops.join(",") + ")";
   }
 
   function industryTreemapBackground(node, segment) {
