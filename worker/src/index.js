@@ -95,6 +95,7 @@ export default {
       if (request.method === "GET" && url.pathname === "/api/financials") return jsonResponse(await financialMetricsFromD1(env));
       if (request.method === "GET" && url.pathname === "/api/calendar") return jsonResponse(await calendarEvents(env));
       if (request.method === "GET" && url.pathname === "/api/management/reports") return jsonResponse(await managementReportsFromD1(env));
+      if (request.method === "GET" && url.pathname === "/api/industry-performance") return jsonResponse(await industryPerformanceFromD1(env));
       if (request.method === "GET" && url.pathname.startsWith("/api/management/template/")) return managementTemplateResponse(url.pathname.split("/").pop());
       if (request.method === "GET" && url.pathname === "/api/grants") return jsonResponse(await governmentProjectsFromD1(env, "", { excludeSource: "NTIS", limit: 500 }));
       if (request.method === "GET" && url.pathname === "/api/rd/projects") return jsonResponse(await rdProjectsFromD1(env, url.searchParams));
@@ -110,6 +111,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/refresh") return await refresh(request, env);
       if (request.method === "POST" && url.pathname === "/api/financials/refresh") return await refreshFinancialMetrics(request, env);
       if (request.method === "POST" && url.pathname.startsWith("/api/management/import/")) return await importManagementReport(request, env, url.pathname.split("/").pop());
+      if (request.method === "POST" && url.pathname === "/api/industry-performance/import") return await importIndustryPerformance(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/refresh") return await refreshGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/grants/import") return await importGovernmentProjects(request, env);
       if (request.method === "POST" && url.pathname === "/api/rd/strategy") return await rdStrategyAnalysis(request, env);
@@ -660,6 +662,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
   const governmentProjects = await governmentProjectsFromD1(env, cutoff, { excludeSource: "NTIS", limit: 500 });
   const financialMetrics = await financialMetricsFromD1(env);
   const managementReports = await managementReportsFromD1(env);
+  const industryPerformance = await industryPerformanceFromD1(env);
   const calendar = await calendarEvents(env, diagnostics);
   const itemSummaries = await itemSummariesFromD1(env);
   const disclosures = attachItemSummaries((disclosureRows.results || []).map(disclosureFromDb), itemSummaries);
@@ -673,6 +676,7 @@ async function latestBriefingFromD1(env, updatedAt = "", diagnostics = []) {
     government_projects: governmentProjects,
     financial_metrics: financialMetrics,
     management_reports: managementReports,
+    industry_performance: industryPerformance,
     calendar_events: calendar.events,
     calendar_status: calendar.status,
     analysis: {},
@@ -997,6 +1001,132 @@ async function managementReportsFromD1(env) {
     }, parseJson(row.data_json, {}));
   }
   return result;
+}
+
+async function industryPerformanceFromD1(env) {
+  if (!env.DB) return { records: [], latest_period: "", updated_at: "" };
+  const rows = await env.DB.prepare(
+    "SELECT * FROM industry_performance_records WHERE report_year >= ? ORDER BY report_year ASC, report_month ASC, company ASC, business_segment ASC"
+  ).bind(new Date().getFullYear() - 5).all();
+  const records = (rows.results || []).map(function (row) {
+    return {
+      id: row.id,
+      report_year: Number(row.report_year),
+      report_month: Number(row.report_month),
+      company: row.company,
+      business_segment: row.business_segment,
+      monthly_target: nullableNumber(row.monthly_target),
+      monthly_actual: nullableNumber(row.monthly_actual),
+      monthly_achievement: nullableNumber(row.monthly_achievement),
+      source_ytd_target: nullableNumber(row.source_ytd_target),
+      source_ytd_actual: nullableNumber(row.source_ytd_actual),
+      source_ytd_achievement: nullableNumber(row.source_ytd_achievement),
+      source_previous_year_actual: nullableNumber(row.source_previous_year_actual),
+      source_yoy_amount: nullableNumber(row.source_yoy_amount),
+      source_yoy_rate: nullableNumber(row.source_yoy_rate),
+      note: row.note || "",
+      source_filename: row.source_filename || "",
+      source_sheet: row.source_sheet || "",
+      source_row: Number(row.source_row || 0),
+      last_imported_at: row.last_imported_at || ""
+    };
+  });
+  const latest = records.slice().sort(function (a, b) {
+    return b.report_year - a.report_year || b.report_month - a.report_month;
+  })[0];
+  const update = await env.DB.prepare("SELECT imported_at FROM industry_performance_imports ORDER BY imported_at DESC LIMIT 1").first();
+  return {
+    records,
+    latest_period: latest ? String(latest.report_year) + "-" + String(latest.report_month).padStart(2, "0") : "",
+    updated_at: update && update.imported_at || ""
+  };
+}
+
+async function importIndustryPerformance(request, env) {
+  await requireUpdatePassword(request, env);
+  if (!env.DB) return jsonResponse({ ok: false, error: "D1 데이터베이스가 연결되지 않았습니다." }, 503);
+  const payload = await request.json().catch(function () { return null; });
+  const inputRows = payload && Array.isArray(payload.records) ? payload.records : [];
+  if (!inputRows.length) return jsonResponse({ ok: false, error: "저장할 실적 데이터가 없습니다." }, 400);
+  if (inputRows.length > 500) return jsonResponse({ ok: false, error: "한 번에 최대 500개 행까지 전송할 수 있습니다." }, 413);
+  const now = kstTimestamp(new Date());
+  const sourceFilename = clean(payload.source_filename || "").slice(0, 240);
+  const importId = clean(payload.import_id || "") || ("industry:" + new Date().toISOString() + ":" + crypto.randomUUID());
+  const normalized = inputRows.map(function (item) {
+    const year = Number(item.report_year);
+    const month = Number(item.report_month);
+    const company = clean(item.company);
+    const segment = clean(item.business_segment);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12 || !company || !["ETC", "OTC", "수출", "기타"].includes(segment)) {
+      throw Object.assign(new Error("기준연도·월·회원사·사업구분을 확인해주세요."), { status: 400 });
+    }
+    const record = {
+      id: [year, String(month).padStart(2, "0"), company, segment].join("|"),
+      report_year: year,
+      report_month: month,
+      company,
+      business_segment: segment,
+      monthly_target: nullableNumber(item.monthly_target),
+      monthly_actual: nullableNumber(item.monthly_actual),
+      monthly_achievement: nullableNumber(item.monthly_achievement),
+      source_ytd_target: nullableNumber(item.source_ytd_target),
+      source_ytd_actual: nullableNumber(item.source_ytd_actual),
+      source_ytd_achievement: nullableNumber(item.source_ytd_achievement),
+      source_previous_year_actual: nullableNumber(item.source_previous_year_actual),
+      source_yoy_amount: nullableNumber(item.source_yoy_amount),
+      source_yoy_rate: nullableNumber(item.source_yoy_rate),
+      note: clean(item.note || "").slice(0, 2000),
+      source_sheet: clean(item.source_sheet || "").slice(0, 80),
+      source_row: Number(item.source_row || 0) || null
+    };
+    record.record_hash = industryRecordHash(record);
+    return record;
+  });
+  const existing = new Map();
+  // D1의 단일 SQL 문 바인딩 개수 제한보다 작게 나눠 조회합니다.
+  for (let offset = 0; offset < normalized.length; offset += 80) {
+    const ids = normalized.slice(offset, offset + 80).map(function (row) { return row.id; });
+    const placeholders = ids.map(function () { return "?"; }).join(",");
+    const existingRows = await env.DB.prepare("SELECT id, record_hash FROM industry_performance_records WHERE id IN (" + placeholders + ")").bind(...ids).all();
+    for (const row of existingRows.results || []) existing.set(row.id, row.record_hash);
+  }
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  const statements = [];
+  for (const row of normalized) {
+    if (existing.get(row.id) === row.record_hash) { skipped += 1; continue; }
+    if (existing.has(row.id)) updated += 1;
+    else inserted += 1;
+    statements.push(env.DB.prepare(
+      "INSERT INTO industry_performance_records (id, report_year, report_month, company, business_segment, monthly_target, monthly_actual, monthly_achievement, source_ytd_target, source_ytd_actual, source_ytd_achievement, source_previous_year_actual, source_yoy_amount, source_yoy_rate, note, source_filename, source_sheet, source_row, record_hash, first_imported_at, last_imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET monthly_target=excluded.monthly_target, monthly_actual=excluded.monthly_actual, monthly_achievement=excluded.monthly_achievement, source_ytd_target=excluded.source_ytd_target, source_ytd_actual=excluded.source_ytd_actual, source_ytd_achievement=excluded.source_ytd_achievement, source_previous_year_actual=excluded.source_previous_year_actual, source_yoy_amount=excluded.source_yoy_amount, source_yoy_rate=excluded.source_yoy_rate, note=excluded.note, source_filename=excluded.source_filename, source_sheet=excluded.source_sheet, source_row=excluded.source_row, record_hash=excluded.record_hash, last_imported_at=excluded.last_imported_at"
+    ).bind(row.id, row.report_year, row.report_month, row.company, row.business_segment, row.monthly_target, row.monthly_actual, row.monthly_achievement, row.source_ytd_target, row.source_ytd_actual, row.source_ytd_achievement, row.source_previous_year_actual, row.source_yoy_amount, row.source_yoy_rate, row.note, sourceFilename, row.source_sheet, row.source_row, row.record_hash, now, now));
+  }
+  if (statements.length) await env.DB.batch(statements);
+  await env.DB.prepare("INSERT INTO industry_performance_imports (id, source_filename, record_count, inserted_count, updated_count, skipped_count, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(importId, sourceFilename, normalized.length, inserted, updated, skipped, now).run();
+  return jsonResponse({ ok: true, received: normalized.length, inserted, updated, skipped, imported_at: now });
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function industryRecordHash(record) {
+  const text = [
+    record.monthly_target, record.monthly_actual, record.monthly_achievement,
+    record.source_ytd_target, record.source_ytd_actual, record.source_ytd_achievement,
+    record.source_previous_year_actual, record.source_yoy_amount, record.source_yoy_rate,
+    record.note, record.source_sheet, record.source_row
+  ].map(function (value) { return value === null || value === undefined ? "" : String(value); }).join("\u001f");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
 }
 
 async function importManagementReport(request, env, type) {
