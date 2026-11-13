@@ -578,12 +578,12 @@ export const APP_JS = String.raw`
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사별 당월 실적", subtitle: segment === "총계" ? "실적 막대는 ETC·OTC·수출·기타 누적값이며, 점선 마커는 회사별 총 목표입니다." : "사업구분별 실제 실적과 목표를 비교합니다.", pill: formatIndustryPeriod(year, month) }),
-          h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment })
+          h(PanelHead, { title: "회원사 실적 맵", subtitle: segment === "총계" ? "도넛 크기는 실제 실적, 내부 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "버블 크기는 선택한 사업구분의 실제 실적입니다.", pill: formatIndustryPeriod(year, month) }),
+          h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: setCompany })
         )),
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사별 목표 달성률", subtitle: "점선 기준은 100%입니다. 동아ST를 강조 표시합니다.", pill: segment }),
-          h(IndustryAchievementChart, { records: records, year: year, month: month, segment: segment })
+          h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: segment }),
+          h(IndustryCompanyTable, { records: records, year: year, month: month, segment: segment })
         )),
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
           h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본에 입력된 당월 비고입니다.", pill: notes.length ? notes.length + "건" : "" }),
@@ -675,46 +675,60 @@ export const APP_JS = String.raw`
       var records = industryRowsFor(props.records, props.year, props.month, company, props.segment);
       return { company: company, total: aggregateIndustryRows(records), segments: industrySegments(records) };
     }).sort(function (a, b) { return (b.total.actual || -Infinity) - (a.total.actual || -Infinity); });
+    var hoverState = React.useState(null);
+    var hovered = hoverState[0];
+    var setHovered = hoverState[1];
     if (!rows.length) return h("div", { className: "empty compact" }, "선택한 조건의 실적 데이터가 없습니다.");
-    var maximum = Math.max.apply(null, rows.reduce(function (all, row) { return all.concat([row.total.actual || 0, row.total.target || 0]); }, [1]));
-    return h("div", { className: "industry-company-chart-scroll" }, h("div", { className: "industry-company-chart", style: { minWidth: Math.max(1120, rows.length * 44) + "px" } },
-      h(IndustryLegend, { stacked: props.segment === "총계" }),
-      h("div", { className: "industry-company-plot" }, rows.map(function (row) {
-        var targetBottom = Math.max(0, Math.min(100, (row.total.target || 0) / maximum * 100));
-        return h("div", { className: row.company === "동아ST" ? "company-column donga" : "company-column", key: row.company },
-          h("div", { className: "company-value", title: row.company + " 실적 " + formatIndustryNumber(row.total.actual) + " / 목표 " + formatIndustryNumber(row.total.target) }, formatIndustryNumber(row.total.actual)),
-          h("div", { className: "company-bar-area" },
-            h("i", { className: "company-target-marker", style: { bottom: targetBottom + "%" } }),
-            industryStack(row.segments, props.segment, maximum)
-          ),
-          h("small", null, row.company)
+    var nodes = packIndustryNodes(rows);
+    return h("div", { className: "industry-bubble-map" },
+      h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
+      h("div", { className: "bubble-canvas" }, nodes.map(function (node) {
+        var style = {
+          left: (node.x / 1100 * 100) + "%",
+          top: (node.y / 520 * 100) + "%",
+          width: (node.radius * 2) + "px",
+          height: (node.radius * 2) + "px",
+          background: industryBubbleBackground(node, props.segment)
+        };
+        return h("button", {
+          key: node.company,
+          type: "button",
+          className: node.company === "동아ST" ? "industry-bubble donga" : "industry-bubble",
+          style: style,
+          onMouseEnter: function () { setHovered(node); },
+          onMouseLeave: function () { setHovered(null); },
+          onFocus: function () { setHovered(node); },
+          onBlur: function () { setHovered(null); },
+          onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
+          "aria-label": node.company + " 실적 상세 보기"
+        },
+          node.radius >= 44 ? h("span", null, node.company) : null
         );
-      }))
-    ));
+      }), hovered ? h(IndustryBubbleTooltip, { node: hovered }) : null)
+    );
   }
 
-  function IndustryAchievementChart(props) {
+  function IndustryCompanyTable(props) {
     var companies = Array.from(new Set((props.records || []).filter(function (row) {
       return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month));
     }).map(function (row) { return row.company; })));
     var rows = companies.map(function (company) {
-      return { company: company, total: aggregateIndustryRows(industryRowsFor(props.records, props.year, props.month, company, props.segment)) };
-    }).filter(function (row) { return row.total.target !== null && row.total.target !== 0 && row.total.actual !== null; })
-      .sort(function (a, b) { return (b.total.actual / b.total.target) - (a.total.actual / a.total.target); });
-    if (!rows.length) return h("div", { className: "empty compact" }, "목표와 실적이 모두 있는 회원사 데이터가 없습니다.");
-    var maxRate = Math.max.apply(null, rows.map(function (row) { return row.total.actual / row.total.target * 100; }).concat([120]));
-    var ceiling = Math.max(120, Math.ceil(maxRate / 20) * 20);
-    return h("div", { className: "industry-company-chart-scroll" }, h("div", { className: "industry-achievement-chart", style: { minWidth: Math.max(1120, rows.length * 44) + "px" } },
-      h("div", { className: "achievement-reference", style: { bottom: (100 / ceiling * 100) + "%" } }, h("span", null, "100%")),
+      var total = aggregateIndustryRows(industryRowsFor(props.records, props.year, props.month, company, props.segment));
+      var prior = aggregateIndustryRows(industryRowsFor(props.records, Number(props.year) - 1, props.month, company, props.segment));
+      return { company: company, total: total, yoy: total.actual !== null && prior.actual !== null && prior.actual !== 0 ? (total.actual - prior.actual) / Math.abs(prior.actual) * 100 : null };
+    }).sort(function (a, b) { return (b.total.actual || -Infinity) - (a.total.actual || -Infinity); });
+    return h("div", { className: "industry-company-table" },
+      h("div", { className: "industry-company-row head" }, h("span", null, "회원사"), h("span", null, "실적"), h("span", null, "목표"), h("span", null, "달성률"), h("span", null, "전년 동월 대비")),
       rows.map(function (row) {
-        var rate = row.total.actual / row.total.target * 100;
-        return h("div", { className: row.company === "동아ST" ? "achievement-column donga" : "achievement-column", key: row.company },
-          h("span", null, rate.toFixed(0) + "%"),
-          h("i", { style: { height: Math.max(2, Math.min(100, rate / ceiling * 100)) + "%" } }),
-          h("small", null, row.company)
+        return h("div", { className: row.company === "동아ST" ? "industry-company-row donga" : "industry-company-row", key: row.company },
+          h("strong", null, row.company),
+          h("span", null, formatIndustryNumber(row.total.actual)),
+          h("span", null, formatIndustryNumber(row.total.target)),
+          h("span", null, formatIndustryPercent(row.total.actual, row.total.target)),
+          h("span", { className: changeClass(row.yoy) }, formatChange(row.yoy))
         );
       })
-    ));
+    );
   }
 
   function IndustryLegend(props) {
@@ -725,7 +739,77 @@ export const APP_JS = String.raw`
         h("span", null, h("i", { className: "export" }), "수출"),
         h("span", null, h("i", { className: "other" }), "기타")
       ) : h("span", null, h("i", { className: "actual" }), "실제 실적"),
-      h("span", null, h("i", { className: "target" }), props.stacked ? "총 목표" : "목표")
+      props.withoutTarget ? null : h("span", null, h("i", { className: "target" }), props.stacked ? "총 목표" : "목표")
+    );
+  }
+
+  function packIndustryNodes(rows) {
+    var maximum = Math.max.apply(null, rows.map(function (row) { return row.total.actual || 0; }).concat([1]));
+    var nodes = rows.map(function (row, index) {
+      var value = Math.max(0, Number(row.total.actual || 0));
+      var radius = 23 + Math.sqrt(value / maximum) * 68;
+      var angle = index * 2.3999632297;
+      var distance = 18 * Math.sqrt(index);
+      return Object.assign({}, row, {
+        radius: radius,
+        x: 550 + Math.cos(angle) * distance,
+        y: 255 + Math.sin(angle) * distance
+      });
+    });
+    for (var step = 0; step < 180; step += 1) {
+      for (var left = 0; left < nodes.length; left += 1) {
+        for (var right = left + 1; right < nodes.length; right += 1) {
+          var a = nodes[left];
+          var b = nodes[right];
+          var dx = b.x - a.x;
+          var dy = b.y - a.y;
+          var distance = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          var minimum = a.radius + b.radius + 8;
+          if (distance < minimum) {
+            var push = (minimum - distance) / 2;
+            var nx = dx / distance;
+            var ny = dy / distance;
+            a.x -= nx * push;
+            a.y -= ny * push;
+            b.x += nx * push;
+            b.y += ny * push;
+          }
+        }
+      }
+      nodes.forEach(function (node) {
+        node.x = Math.max(node.radius + 8, Math.min(1100 - node.radius - 8, node.x));
+        node.y = Math.max(node.radius + 8, Math.min(520 - node.radius - 8, node.y));
+      });
+    }
+    return nodes;
+  }
+
+  function industryBubbleBackground(node, segment) {
+    if (segment !== "총계") return segmentColor(segment);
+    var total = Math.max(1, Number(node.total.actual || 0));
+    var cursor = 0;
+    var stops = ["ETC", "OTC", "수출", "기타"].map(function (name) {
+      var start = cursor;
+      cursor += Math.max(0, Number(node.segments[name] || 0)) / total * 100;
+      return segmentColor(name) + " " + start.toFixed(2) + "% " + cursor.toFixed(2) + "%";
+    });
+    return "conic-gradient(" + stops.join(",") + ")";
+  }
+
+  function segmentColor(segment) {
+    return { "ETC": "#94403c", "OTC": "#bc625d", "수출": "#dc928d", "기타": "#ead1cf" }[segment] || "#94403c";
+  }
+
+  function IndustryBubbleTooltip(props) {
+    var node = props.node;
+    return h("div", { className: "industry-bubble-tooltip", style: { left: (node.x / 1100 * 100) + "%", top: (node.y / 520 * 100) + "%" } },
+      h("strong", null, node.company),
+      h("p", null, "실적 " + formatIndustryNumber(node.total.actual)),
+      h("p", null, "목표 " + formatIndustryNumber(node.total.target) + " · 달성률 " + formatIndustryPercent(node.total.actual, node.total.target)),
+      h("div", { className: "bubble-tooltip-segments" }, ["ETC", "OTC", "수출", "기타"].map(function (segment) {
+        return h("span", { key: segment }, segment + " " + formatIndustryNumber(node.segments[segment]));
+      })),
+      h("em", null, "클릭하면 월별 상세 보기")
     );
   }
 
