@@ -149,6 +149,7 @@ button { border: 0; cursor: pointer; }
 .schedule-panel.featured .panel-inner { padding: 24px; }
 .schedule-panel.featured .panel-title { font-size: 21px; }
 .panel-inner { padding: 22px; }
+.industry-treemap-panel { position: relative; z-index: 2; overflow: visible; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
 .panel-head-side { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .panel-title { margin: 0; font-size: 19px; font-weight: 950; letter-spacing: -0.04em; }

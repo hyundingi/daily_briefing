@@ -588,7 +588,7 @@ export const APP_JS = String.raw`
         )
       )),
       company === "전체" ? h(React.Fragment, null,
-        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+        h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
           h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "사각형 너비는 선택한 사업구분의 실제 실적입니다.", pill: formatIndustryPeriod(year, month) }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
