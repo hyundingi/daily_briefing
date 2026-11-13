@@ -679,31 +679,29 @@ export const APP_JS = String.raw`
     var hovered = hoverState[0];
     var setHovered = hoverState[1];
     if (!rows.length) return h("div", { className: "empty compact" }, "선택한 조건의 실적 데이터가 없습니다.");
-    var maximum = Math.max.apply(null, rows.map(function (row) { return row.total.actual || 0; }).concat([1]));
-    return h("div", { className: "industry-bubble-map" },
+    var layout = buildIndustryTreemap(rows, 5);
+    return h("div", { className: "industry-treemap-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
-      h("div", { className: "bubble-grid" }, rows.map(function (node) {
-        var diameter = Math.round(46 + Math.sqrt(Math.max(0, Number(node.total.actual || 0)) / maximum) * 102);
-        var style = {
-          width: diameter + "px",
-          height: diameter + "px",
-          background: industryBubbleBackground(node, props.segment)
-        };
-        return h("article", { className: "bubble-tile", key: node.company },
-          h("button", {
+      h("div", { className: "industry-treemap" }, layout.map(function (group, groupIndex) {
+        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: group.total || 1 } }, group.items.map(function (node) {
+          return h("button", {
             type: "button",
-            className: "industry-bubble",
-            style: style,
+            key: node.company,
+            className: node.company === "동아ST" ? "treemap-tile donga" : "treemap-tile",
+            style: { flexGrow: Math.max(0.003, node.total.actual || 0), background: industryTreemapBackground(node, props.segment) },
             onMouseEnter: function () { setHovered(node); },
             onMouseLeave: function () { setHovered(null); },
             onFocus: function () { setHovered(node); },
             onBlur: function () { setHovered(null); },
             onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
             "aria-label": node.company + " 실적 상세 보기"
-          }),
-          h("strong", { className: node.company === "동아ST" ? "bubble-company-name donga" : "bubble-company-name" }, node.company),
-          hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true }) : null
-        );
+          },
+            h("strong", null, node.company),
+            h("span", null, formatIndustryNumber(node.total.actual)),
+            props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
+            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true }) : null
+          );
+        }));
       }))
     );
   }
@@ -743,6 +741,21 @@ export const APP_JS = String.raw`
     );
   }
 
+  function buildIndustryTreemap(rows, groupCount) {
+    var groups = Array.from({ length: groupCount }, function () { return { total: 0, items: [] }; });
+    rows.slice().sort(function (a, b) { return (b.total.actual || 0) - (a.total.actual || 0); }).forEach(function (row) {
+      var group = groups.slice().sort(function (a, b) {
+        return (a.total - b.total) || (a.items.length - b.items.length);
+      })[0];
+      group.items.push(row);
+      group.total += Math.max(0, Number(row.total.actual || 0));
+    });
+    return groups.filter(function (group) { return group.items.length; }).map(function (group) {
+      group.items.sort(function (a, b) { return (b.total.actual || 0) - (a.total.actual || 0); });
+      return group;
+    });
+  }
+
   function industryBubbleBackground(node, segment) {
     if (segment !== "총계") return segmentColor(segment);
     var total = Math.max(1, Number(node.total.actual || 0));
@@ -753,6 +766,11 @@ export const APP_JS = String.raw`
       return segmentColor(name) + " " + start.toFixed(2) + "% " + cursor.toFixed(2) + "%";
     });
     return "conic-gradient(" + stops.join(",") + ")";
+  }
+
+  function industryTreemapBackground(node, segment) {
+    if (segment !== "총계") return segmentColor(segment);
+    return "linear-gradient(145deg, rgba(248,232,231,0.94), rgba(255,255,255,0.86))";
   }
 
   function segmentColor(segment) {
