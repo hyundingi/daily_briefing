@@ -729,7 +729,7 @@ export const APP_JS = String.raw`
             h("strong", null, node.company),
             h("span", null, formatIndustryNumber(node.total.actual)),
             props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
-            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length), vertical: groupIndex === 0 ? "below" : "above" }) : null
+            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
           );
         }));
       }))
