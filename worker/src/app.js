@@ -713,7 +713,7 @@ export const APP_JS = String.raw`
     return h("div", { className: "industry-treemap-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
       h("div", { className: "industry-treemap" }, layout.map(function (group, groupIndex) {
-        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: 1 } }, group.items.map(function (node) {
+        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: 1 } }, group.items.map(function (node, index) {
           return h("button", {
             type: "button",
             key: node.company,
