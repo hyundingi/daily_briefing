@@ -645,23 +645,40 @@ export const APP_JS = String.raw`
       };
     });
     var maximum = Math.max.apply(null, values.reduce(function (all, row) { return all.concat([row.total.target || 0, row.total.actual || 0]); }, [1]));
-    var targetPoints = values.map(function (row, index) {
-      var x = (index + 0.5) * 100;
-      var y = 100 - ((row.total.target || 0) / maximum * 94);
-      return x.toFixed(1) + "," + y.toFixed(1);
+    var targetCoordinates = values.map(function (row, index) {
+      return {
+        x: (index + 0.5) * 100,
+        y: 100 - ((row.total.target || 0) / maximum * 94)
+      };
+    });
+    var targetPoints = targetCoordinates.map(function (point) {
+      return point.x.toFixed(1) + "," + point.y.toFixed(1);
     }).join(" ");
+    var axisValues = [maximum, maximum * 2 / 3, maximum / 3, 0];
     return h("div", { className: "industry-chart-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계" }),
-      h("div", { className: "industry-monthly-chart", style: { gridTemplateColumns: "repeat(" + values.length + ", minmax(22px, 1fr))" } },
-        h("svg", { className: "industry-target-line", viewBox: "0 0 " + (values.length * 100) + " 100", preserveAspectRatio: "none", "aria-hidden": "true" }, h("polyline", { points: targetPoints })),
-        values.map(function (row, index) {
-        return h("div", { className: "industry-month-bar", key: index },
-          h("div", { className: "industry-bar-pair", title: (index + 1) + "월 · 목표 " + formatIndustryNumber(row.total.target) + " / 실적 " + formatIndustryNumber(row.total.actual) },
-            industryStack(row.segments, props.segment, maximum)
+      h("div", { className: "industry-chart-with-axis" },
+        h("div", { className: "industry-chart-axis", "aria-hidden": "true" }, axisValues.map(function (value, index) {
+          return h("span", { key: index }, formatIndustryNumber(value));
+        })),
+        h("div", { className: "industry-monthly-chart", style: { gridTemplateColumns: "repeat(" + values.length + ", minmax(22px, 1fr))" } },
+          h("svg", { className: "industry-target-line", viewBox: "0 0 " + (values.length * 100) + " 100", preserveAspectRatio: "none", "aria-hidden": "true" },
+            h(React.Fragment, null,
+              h("polyline", { points: targetPoints }),
+              targetCoordinates.map(function (point, index) {
+                return h("circle", { key: index, cx: point.x, cy: point.y, r: 2.8 });
+              })
+            )
           ),
-          h("small", null, (index + 1) + "월")
-        );
-      }))
+          values.map(function (row, index) {
+          return h("div", { className: "industry-month-bar", key: index },
+            h("div", { className: "industry-bar-pair", title: (index + 1) + "월 · 목표 " + formatIndustryNumber(row.total.target) + " / 실적 " + formatIndustryNumber(row.total.actual) },
+              industryStack(row.segments, props.segment, maximum)
+            ),
+            h("small", null, (index + 1) + "월")
+          );
+        }))
+      )
     );
   }
 
@@ -712,7 +729,7 @@ export const APP_JS = String.raw`
             h("strong", null, node.company),
             h("span", null, formatIndustryNumber(node.total.actual)),
             props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
-            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true }) : null
+            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
           );
         }));
       }))
@@ -793,13 +810,19 @@ export const APP_JS = String.raw`
     return "treemap-tile" + (node.company === "동아ST" ? " donga" : "") + density + contrast;
   }
 
+  function treemapTooltipPlacement(index, length) {
+    if (index === 0) return "left";
+    if (index === length - 1) return "right";
+    return "center";
+  }
+
   function segmentColor(segment) {
     return { "ETC": "#94403c", "OTC": "#bc625d", "수출": "#dc928d", "기타": "#ead1cf" }[segment] || "#94403c";
   }
 
   function IndustryBubbleTooltip(props) {
     var node = props.node;
-    return h("div", { className: props.inline ? "industry-bubble-tooltip inline" : "industry-bubble-tooltip" },
+    return h("div", { className: props.inline ? "industry-bubble-tooltip inline tooltip-" + (props.placement || "center") : "industry-bubble-tooltip" },
       h("strong", null, node.company),
       h("p", null, "실적 " + formatIndustryNumber(node.total.actual)),
       h("p", null, "목표 " + formatIndustryNumber(node.total.target) + " · 달성률 " + formatIndustryPercent(node.total.actual, node.total.target)),

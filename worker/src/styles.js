@@ -182,6 +182,8 @@ button { border: 0; cursor: pointer; }
 .industry-chart-wrap { padding: 16px 14px 10px; border: 1px solid rgba(234,223,221,0.8); border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,232,231,0.48)); }
 .industry-chart-legend { display: flex; justify-content: flex-end; gap: 14px; color: var(--muted); font-size: 12px; font-weight: 850; }
 .industry-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.industry-chart-with-axis { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 7px; align-items: start; }
+.industry-chart-axis { height: 275px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; padding: 18px 0 24px; color: var(--muted); font-size: 10px; font-weight: 800; line-height: 1; text-align: right; }
 .industry-chart-legend i { width: 9px; height: 9px; border-radius: 50%; }
 .industry-chart-legend i.target { width: 15px; height: 0; border-radius: 0; border-top: 2px dashed var(--primary-900); }
 .industry-chart-legend i.actual { background: var(--primary-800); }
@@ -192,6 +194,7 @@ button { border: 0; cursor: pointer; }
 .industry-monthly-chart { position: relative; height: 275px; display: grid; grid-template-columns: repeat(12, minmax(22px, 1fr)); gap: 7px; align-items: end; padding-top: 18px; background: repeating-linear-gradient(to bottom, transparent 0 58px, rgba(117,111,111,0.1) 59px); border-bottom: 1px solid var(--line); }
 .industry-target-line { position: absolute; inset: 18px 0 24px; z-index: 3; overflow: visible; pointer-events: none; }
 .industry-target-line polyline { fill: none; stroke: var(--primary-900); stroke-width: 2.2; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
+.industry-target-line circle { fill: #fff; stroke: var(--primary-900); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .industry-month-bar { position: relative; z-index: 2; min-width: 0; height: 100%; display: grid; grid-template-rows: 1fr 24px; gap: 6px; align-items: end; text-align: center; }
 .industry-bar-pair { height: 100%; display: flex; align-items: end; justify-content: center; }
 .industry-stack { width: min(24px, 62%); height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; overflow: hidden; border-radius: 7px 7px 2px 2px; box-shadow: 0 5px 13px rgba(111,48,45,0.08); }
@@ -246,7 +249,10 @@ button { border: 0; cursor: pointer; }
 .treemap-tile.contrast-light > strong, .treemap-tile.contrast-light > span { color: #fff; text-shadow: 0 1px 2px rgba(72,27,25,.25); }
 .treemap-segments { position: absolute; right: 0; bottom: 0; left: 0; height: 10px; border-radius: 0 0 13px 13px; box-shadow: inset 0 1px rgba(255,255,255,0.48); }
 .industry-bubble-tooltip { position: absolute; z-index: 50; min-width: 215px; max-width: 260px; padding: 14px; border: 1px solid rgba(148,64,60,0.2); border-radius: 18px; background: rgba(255,255,255,0.98); box-shadow: 0 18px 40px rgba(72,44,42,0.24); pointer-events: none; }
-.industry-bubble-tooltip.inline { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.industry-bubble-tooltip.inline { top: auto; bottom: calc(100% + 12px); }
+.industry-bubble-tooltip.inline.tooltip-center { left: 50%; transform: translateX(-50%); }
+.industry-bubble-tooltip.inline.tooltip-left { left: 0; }
+.industry-bubble-tooltip.inline.tooltip-right { right: 0; }
 .industry-bubble-tooltip strong { display: block; color: var(--primary-900); font-size: 14px; }
 .industry-bubble-tooltip p { margin: 6px 0 0; color: #5f5655; font-size: 12px; font-weight: 750; line-height: 1.5; }
 .bubble-tooltip-segments { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
@@ -578,12 +584,14 @@ button { border: 0; cursor: pointer; }
   .industry-toolbar label, .industry-toolbar select { width: 100%; }
   .industry-updated { margin: 0; }
   .industry-monthly-chart { gap: 3px; }
+  .industry-chart-with-axis { grid-template-columns: 39px minmax(0, 1fr); gap: 4px; }
+  .industry-chart-axis { font-size: 8px; }
   .industry-treemap { height: 540px; gap: 4px; }
   .treemap-row { gap: 4px; }
   .treemap-tile { padding: 7px; border-radius: 10px; gap: 2px; }
   .treemap-tile > strong { font-size: 9px; }
   .treemap-tile > span { font-size: 8px; }
-  .industry-bubble-tooltip.inline { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .industry-bubble-tooltip.inline { min-width: 195px; }
   .industry-company-row { grid-template-columns: 1fr; gap: 7px; }
   .industry-company-row.head { display: none; }
   .industry-company-row > span { text-align: left; }
