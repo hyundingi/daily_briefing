@@ -519,27 +519,27 @@ export const APP_JS = String.raw`
     var companyState = React.useState("전체");
     var company = companyState[0];
     var setCompany = companyState[1];
-    var segmentState = React.useState("전체");
+    var segmentState = React.useState("총계");
     var segment = segmentState[0];
     var setSegment = segmentState[1];
     var years = Array.from(new Set(records.map(function (row) { return String(row.report_year); }))).sort();
     var companies = Array.from(new Set(records.map(function (row) { return row.company; }))).sort(function (a, b) { return a.localeCompare(b, "ko"); });
-    var selectedRows = records.filter(function (row) {
-      return String(row.report_year) === String(year) && String(row.report_month) === String(Number(month)) &&
-        (company === "전체" || row.company === company) &&
-        (segment === "전체" || row.business_segment === segment);
-    });
+    var availableMonths = Array.from(new Set(records.filter(function (row) { return String(row.report_year) === String(year); }).map(function (row) { return Number(row.report_month); }))).sort(function (a, b) { return a - b; });
+    React.useEffect(function () {
+      if (availableMonths.length && availableMonths.indexOf(Number(month)) < 0) setMonth(String(availableMonths[availableMonths.length - 1]));
+    }, [year, records.length]);
+    var selectedRows = industryRowsFor(records, year, month, company, segment);
     var current = aggregateIndustryRows(selectedRows);
     var ytdRows = records.filter(function (row) {
       return String(row.report_year) === String(year) && Number(row.report_month) <= Number(month) &&
         (company === "전체" || row.company === company) &&
-        (segment === "전체" || row.business_segment === segment);
+        (segment === "총계" || row.business_segment === segment);
     });
     var ytd = aggregateIndustryRows(ytdRows);
     var previousRows = records.filter(function (row) {
       return Number(row.report_year) === Number(year) - 1 && Number(row.report_month) === Number(month) &&
         (company === "전체" || row.company === company) &&
-        (segment === "전체" || row.business_segment === segment);
+        (segment === "총계" || row.business_segment === segment);
     });
     var previous = aggregateIndustryRows(previousRows);
     var yoy = current.actual !== null && previous.actual !== null && previous.actual !== 0 ? (current.actual - previous.actual) / Math.abs(previous.actual) * 100 : null;
@@ -561,47 +561,56 @@ export const APP_JS = String.raw`
           h("label", null, "연도", h("select", { value: year, onChange: function (event) {
             var nextYear = event.target.value;
             setYear(nextYear);
-            var availableMonths = records.filter(function (row) { return String(row.report_year) === nextYear; }).map(function (row) { return Number(row.report_month); });
-            if (availableMonths.indexOf(Number(month)) < 0) setMonth(String(Math.max.apply(null, availableMonths)));
+            var nextMonths = Array.from(new Set(records.filter(function (row) { return String(row.report_year) === nextYear; }).map(function (row) { return Number(row.report_month); })));
+            if (nextMonths.indexOf(Number(month)) < 0) setMonth(String(Math.max.apply(null, nextMonths)));
           } }, years.map(function (value) { return h("option", { key: value, value: value }, value + "년"); }))),
           h("label", null, "월", h("select", { value: String(Number(month)), onChange: function (event) { setMonth(event.target.value); } },
-            Array.from({ length: 12 }, function (_, index) { return index + 1; }).map(function (value) { return h("option", { key: value, value: value }, value + "월"); })
+            availableMonths.map(function (value) { return h("option", { key: value, value: value }, value + "월"); })
           )),
           h("label", null, "회원사", h("select", { value: company, onChange: function (event) { setCompany(event.target.value); } },
             ["전체"].concat(companies).map(function (value) { return h("option", { key: value, value: value }, value); })
           )),
           h("label", null, "사업구분", h("select", { value: segment, onChange: function (event) { setSegment(event.target.value); } },
-            ["전체", "ETC", "OTC", "수출", "기타"].map(function (value) { return h("option", { key: value, value: value }, value); })
+            ["총계", "ETC", "OTC", "수출", "기타"].map(function (value) { return h("option", { key: value, value: value }, value); })
           )),
           h("p", { className: "industry-updated" }, performance.updated_at ? "최근 반영 " + formatDateTime(performance.updated_at) : "")
         )
       )),
-      h("section", { className: "industry-kpi-grid" },
-        h(IndustryKpi, { label: "당월 실적", value: formatIndustryNumber(current.actual), foot: "목표 " + formatIndustryNumber(current.target) }),
-        h(IndustryKpi, { label: "목표 달성률", value: formatIndustryPercent(current.actual, current.target), foot: current.actual !== null && current.target !== null ? "당월 기준" : "집계 전" }),
-        h(IndustryKpi, { label: "누계 실적", value: formatIndustryNumber(ytd.actual), foot: "누계 목표 " + formatIndustryNumber(ytd.target) }),
-        h(IndustryKpi, { label: "전년 동월 대비", value: formatChange(yoy), foot: previous.actual !== null ? "전년 동월 " + formatIndustryNumber(previous.actual) : "비교 데이터 없음", className: changeClass(yoy) })
-      ),
-      h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-        h(PanelHead, { title: "월별 목표·실적 추이", subtitle: company === "전체" ? "전체 회원사 합산 기준입니다." : company + " 기준입니다.", pill: year + "년" }),
-        h(IndustryMonthlyChart, { records: records, year: year, company: company, segment: segment })
-      )),
-      h("section", { className: "industry-detail-grid" },
-        h("div", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "사업구분별 실적", subtitle: "선택한 월의 사업구분별 실적과 목표 달성률입니다." }),
-          h(IndustrySegmentGrid, { records: records, year: year, month: month, company: company })
+      company === "전체" ? h(React.Fragment, null,
+        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+          h(PanelHead, { title: "회원사별 당월 실적", subtitle: segment === "총계" ? "실적 막대는 ETC·OTC·수출·기타 누적값이며, 점선 마커는 회사별 총 목표입니다." : "사업구분별 실제 실적과 목표를 비교합니다.", pill: formatIndustryPeriod(year, month) }),
+          h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment })
         )),
-        h("div", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본의 당월 비고를 그대로 보여줍니다.", pill: notes.length ? notes.length + "건" : "" }),
-          h("div", { className: "industry-note-list" }, notes.length ? notes.slice(0, 8).map(function (row) {
-            return h("article", { key: row.company + row.business_segment }, h("div", null, h("strong", null, row.company), h("span", null, row.business_segment)), h("p", null, row.note));
-          }) : h("div", { className: "empty compact" }, "선택한 조건에 입력된 증감 사유가 없습니다."))
+        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+          h(PanelHead, { title: "회원사별 목표 달성률", subtitle: "점선 기준은 100%입니다. 동아ST를 강조 표시합니다.", pill: segment }),
+          h(IndustryAchievementChart, { records: records, year: year, month: month, segment: segment })
+        )),
+        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+          h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본에 입력된 당월 비고입니다.", pill: notes.length ? notes.length + "건" : "" }),
+          h(IndustryNotes, { notes: notes })
         ))
-      ),
-      h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-        h(PanelHead, { title: "회원사별 비교", subtitle: "선택한 월·사업구분 기준입니다.", pill: formatIndustryPeriod(year, month) }),
-        h(IndustryCompanyTable, { records: records, year: year, month: month, company: company, segment: segment })
-      ))
+      ) : h(React.Fragment, null,
+        h("section", { className: "industry-kpi-grid" },
+          h(IndustryKpi, { label: "당월 실적", value: formatIndustryNumber(current.actual), foot: "목표 " + formatIndustryNumber(current.target) }),
+          h(IndustryKpi, { label: "목표 달성률", value: formatIndustryPercent(current.actual, current.target), foot: current.actual !== null && current.target !== null ? "당월 기준" : "집계 전" }),
+          h(IndustryKpi, { label: "누계 실적", value: formatIndustryNumber(ytd.actual), foot: "누계 목표 " + formatIndustryNumber(ytd.target) }),
+          h(IndustryKpi, { label: "전년 동월 대비", value: formatChange(yoy), foot: previous.actual !== null ? "전년 동월 " + formatIndustryNumber(previous.actual) : "비교 데이터 없음", className: changeClass(yoy) })
+        ),
+        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
+          h(PanelHead, { title: company + " 월별 실적 추이", subtitle: segment === "총계" ? "실적 막대는 사업구분별 누적값이며, 점선은 총 목표입니다." : segment + " 실제 실적과 목표를 비교합니다.", pill: year + "년 1~" + Number(month) + "월" }),
+          h(IndustryMonthlyChart, { records: records, year: year, throughMonth: month, company: company, segment: segment })
+        )),
+        h("section", { className: "industry-detail-grid" },
+          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+            h(PanelHead, { title: "사업구분별 실적", subtitle: "선택한 월의 사업구분별 실적과 목표 달성률입니다." }),
+            h(IndustrySegmentGrid, { records: records, year: year, month: month, company: company })
+          )),
+          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+            h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본의 당월 비고를 그대로 보여줍니다.", pill: notes.length ? notes.length + "건" : "" }),
+            h(IndustryNotes, { notes: notes })
+          ))
+        )
+      )
     );
   }
 
@@ -614,24 +623,28 @@ export const APP_JS = String.raw`
   }
 
   function IndustryMonthlyChart(props) {
-    var months = Array.from({ length: 12 }, function (_, index) { return index + 1; });
+    var months = Array.from({ length: Number(props.throughMonth || 12) }, function (_, index) { return index + 1; });
     var values = months.map(function (month) {
-      return aggregateIndustryRows((props.records || []).filter(function (row) {
-        return String(row.report_year) === String(props.year) && Number(row.report_month) === month &&
-          (props.company === "전체" || row.company === props.company) &&
-          (props.segment === "전체" || row.business_segment === props.segment);
-      }));
+      var rows = industryRowsFor(props.records || [], props.year, month, props.company, props.segment);
+      return {
+        total: aggregateIndustryRows(rows),
+        segments: industrySegments(rows)
+      };
     });
-    var maximum = Math.max.apply(null, values.reduce(function (all, row) { return all.concat([row.target || 0, row.actual || 0]); }, [1]));
+    var maximum = Math.max.apply(null, values.reduce(function (all, row) { return all.concat([row.total.target || 0, row.total.actual || 0]); }, [1]));
+    var targetPoints = values.map(function (row, index) {
+      var x = (index + 0.5) * 100;
+      var y = 100 - ((row.total.target || 0) / maximum * 94);
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
     return h("div", { className: "industry-chart-wrap" },
-      h("div", { className: "industry-chart-legend" }, h("span", null, h("i", { className: "target" }), "목표"), h("span", null, h("i", { className: "actual" }), "실적")),
-      h("div", { className: "industry-monthly-chart" }, values.map(function (row, index) {
-        var targetHeight = row.target === null ? 0 : Math.max(3, Math.round(row.target / maximum * 100));
-        var actualHeight = row.actual === null ? 0 : Math.max(3, Math.round(row.actual / maximum * 100));
+      h(IndustryLegend, { stacked: props.segment === "총계" }),
+      h("div", { className: "industry-monthly-chart", style: { gridTemplateColumns: "repeat(" + values.length + ", minmax(22px, 1fr))" } },
+        h("svg", { className: "industry-target-line", viewBox: "0 0 " + (values.length * 100) + " 100", preserveAspectRatio: "none", "aria-hidden": "true" }, h("polyline", { points: targetPoints })),
+        values.map(function (row, index) {
         return h("div", { className: "industry-month-bar", key: index },
-          h("div", { className: "industry-bar-pair", title: (index + 1) + "월 · 목표 " + formatIndustryNumber(row.target) + " / 실적 " + formatIndustryNumber(row.actual) },
-            h("span", { className: "industry-bar target", style: { height: targetHeight + "%" } }),
-            h("span", { className: "industry-bar actual", style: { height: actualHeight + "%" } })
+          h("div", { className: "industry-bar-pair", title: (index + 1) + "월 · 목표 " + formatIndustryNumber(row.total.target) + " / 실적 " + formatIndustryNumber(row.total.actual) },
+            industryStack(row.segments, props.segment, maximum)
           ),
           h("small", null, (index + 1) + "월")
         );
@@ -654,30 +667,101 @@ export const APP_JS = String.raw`
     }));
   }
 
-  function IndustryCompanyTable(props) {
-    var rows = Array.from(new Set((props.records || []).filter(function (row) {
-      return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month)) &&
-        (props.company === "전체" || row.company === props.company) &&
-        (props.segment === "전체" || row.business_segment === props.segment);
-    }).map(function (row) { return row.company; }))).map(function (company) {
-      return { company: company, values: aggregateIndustryRows((props.records || []).filter(function (row) {
-        return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month)) &&
-          row.company === company && (props.segment === "전체" || row.business_segment === props.segment);
-      })) };
-    }).sort(function (a, b) { return (b.values.actual || -Infinity) - (a.values.actual || -Infinity); });
+  function IndustryComparisonChart(props) {
+    var companies = Array.from(new Set((props.records || []).filter(function (row) {
+      return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month));
+    }).map(function (row) { return row.company; })));
+    var rows = companies.map(function (company) {
+      var records = industryRowsFor(props.records, props.year, props.month, company, props.segment);
+      return { company: company, total: aggregateIndustryRows(records), segments: industrySegments(records) };
+    }).sort(function (a, b) { return (b.total.actual || -Infinity) - (a.total.actual || -Infinity); });
     if (!rows.length) return h("div", { className: "empty compact" }, "선택한 조건의 실적 데이터가 없습니다.");
-    var max = Math.max.apply(null, rows.map(function (row) { return row.values.actual || 0; }).concat([1]));
-    return h("div", { className: "industry-company-table" },
-      h("div", { className: "industry-company-row head" }, h("span", null, "회원사"), h("span", null, "실적"), h("span", null, "목표 달성률")),
+    var maximum = Math.max.apply(null, rows.reduce(function (all, row) { return all.concat([row.total.actual || 0, row.total.target || 0]); }, [1]));
+    return h("div", { className: "industry-company-chart-scroll" }, h("div", { className: "industry-company-chart", style: { minWidth: Math.max(1120, rows.length * 44) + "px" } },
+      h(IndustryLegend, { stacked: props.segment === "총계" }),
+      h("div", { className: "industry-company-plot" }, rows.map(function (row) {
+        var targetBottom = Math.max(0, Math.min(100, (row.total.target || 0) / maximum * 100));
+        return h("div", { className: row.company === "동아ST" ? "company-column donga" : "company-column", key: row.company },
+          h("div", { className: "company-value", title: row.company + " 실적 " + formatIndustryNumber(row.total.actual) + " / 목표 " + formatIndustryNumber(row.total.target) }, formatIndustryNumber(row.total.actual)),
+          h("div", { className: "company-bar-area" },
+            h("i", { className: "company-target-marker", style: { bottom: targetBottom + "%" } }),
+            industryStack(row.segments, props.segment, maximum)
+          ),
+          h("small", null, row.company)
+        );
+      }))
+    ));
+  }
+
+  function IndustryAchievementChart(props) {
+    var companies = Array.from(new Set((props.records || []).filter(function (row) {
+      return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month));
+    }).map(function (row) { return row.company; })));
+    var rows = companies.map(function (company) {
+      return { company: company, total: aggregateIndustryRows(industryRowsFor(props.records, props.year, props.month, company, props.segment)) };
+    }).filter(function (row) { return row.total.target !== null && row.total.target !== 0 && row.total.actual !== null; })
+      .sort(function (a, b) { return (b.total.actual / b.total.target) - (a.total.actual / a.total.target); });
+    if (!rows.length) return h("div", { className: "empty compact" }, "목표와 실적이 모두 있는 회원사 데이터가 없습니다.");
+    var maxRate = Math.max.apply(null, rows.map(function (row) { return row.total.actual / row.total.target * 100; }).concat([120]));
+    var ceiling = Math.max(120, Math.ceil(maxRate / 20) * 20);
+    return h("div", { className: "industry-company-chart-scroll" }, h("div", { className: "industry-achievement-chart", style: { minWidth: Math.max(1120, rows.length * 44) + "px" } },
+      h("div", { className: "achievement-reference", style: { bottom: (100 / ceiling * 100) + "%" } }, h("span", null, "100%")),
       rows.map(function (row) {
-        var width = Math.max(2, Math.round((row.values.actual || 0) / max * 100));
-        return h("div", { className: "industry-company-row", key: row.company },
-          h("strong", null, row.company),
-          h("div", { className: "industry-value-bar" }, h("i", { style: { width: width + "%" } }), h("span", null, formatIndustryNumber(row.values.actual))),
-          h("span", null, formatIndustryPercent(row.values.actual, row.values.target))
+        var rate = row.total.actual / row.total.target * 100;
+        return h("div", { className: row.company === "동아ST" ? "achievement-column donga" : "achievement-column", key: row.company },
+          h("span", null, rate.toFixed(0) + "%"),
+          h("i", { style: { height: Math.max(2, Math.min(100, rate / ceiling * 100)) + "%" } }),
+          h("small", null, row.company)
         );
       })
+    ));
+  }
+
+  function IndustryLegend(props) {
+    return h("div", { className: "industry-chart-legend" },
+      props.stacked ? h(React.Fragment, null,
+        h("span", null, h("i", { className: "etc" }), "ETC"),
+        h("span", null, h("i", { className: "otc" }), "OTC"),
+        h("span", null, h("i", { className: "export" }), "수출"),
+        h("span", null, h("i", { className: "other" }), "기타")
+      ) : h("span", null, h("i", { className: "actual" }), "실제 실적"),
+      h("span", null, h("i", { className: "target" }), props.stacked ? "총 목표" : "목표")
     );
+  }
+
+  function IndustryNotes(props) {
+    var notes = props.notes || [];
+    return h("div", { className: "industry-note-list" }, notes.length ? notes.slice(0, 12).map(function (row) {
+      return h("article", { key: row.company + row.business_segment }, h("div", null, h("strong", null, row.company), h("span", null, row.business_segment)), h("p", null, row.note));
+    }) : h("div", { className: "empty compact" }, "선택한 조건에 입력된 증감 사유가 없습니다."));
+  }
+
+  function industryRowsFor(records, year, month, company, segment) {
+    return (records || []).filter(function (row) {
+      return String(row.report_year) === String(year) && String(row.report_month) === String(Number(month)) &&
+        (company === "전체" || row.company === company) &&
+        (segment === "총계" || row.business_segment === segment);
+    });
+  }
+
+  function industrySegments(rows) {
+    var values = {};
+    ["ETC", "OTC", "수출", "기타"].forEach(function (segment) {
+      values[segment] = aggregateIndustryRows((rows || []).filter(function (row) { return row.business_segment === segment; })).actual || 0;
+    });
+    return values;
+  }
+
+  function industryStack(segments, selectedSegment, maximum) {
+    var order = selectedSegment === "총계" ? ["ETC", "OTC", "수출", "기타"] : [selectedSegment];
+    return h("div", { className: "industry-stack" }, order.map(function (segment) {
+      var value = Number(segments[segment] || 0);
+      return h("i", { key: segment, className: "stack-" + industrySegmentClass(segment), style: { height: value ? Math.max(2, value / maximum * 100) + "%" : "0%" } });
+    }));
+  }
+
+  function industrySegmentClass(segment) {
+    return { "ETC": "etc", "OTC": "otc", "수출": "export", "기타": "other" }[segment] || "actual";
   }
 
   function aggregateIndustryRows(rows) {
