@@ -250,6 +250,7 @@ button { border: 0; cursor: pointer; }
 .treemap-segments { position: absolute; right: 0; bottom: 0; left: 0; height: 10px; border-radius: 0 0 13px 13px; box-shadow: inset 0 1px rgba(255,255,255,0.48); }
 .industry-bubble-tooltip { position: absolute; z-index: 50; min-width: 215px; max-width: 260px; padding: 14px; border: 1px solid rgba(148,64,60,0.2); border-radius: 18px; background: rgba(255,255,255,0.98); box-shadow: 0 18px 40px rgba(72,44,42,0.24); pointer-events: none; }
 .industry-bubble-tooltip.inline { top: auto; bottom: calc(100% + 12px); }
+.industry-bubble-tooltip.inline.tooltip-below { top: calc(100% + 12px); bottom: auto; }
 .industry-bubble-tooltip.inline.tooltip-center { left: 50%; transform: translateX(-50%); }
 .industry-bubble-tooltip.inline.tooltip-left { left: 0; }
 .industry-bubble-tooltip.inline.tooltip-right { right: 0; }

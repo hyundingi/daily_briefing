@@ -729,7 +729,7 @@ export const APP_JS = String.raw`
             h("strong", null, node.company),
             h("span", null, formatIndustryNumber(node.total.actual)),
             props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
-            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
+            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length), vertical: groupIndex === 0 ? "below" : "above" }) : null
           );
         }));
       }))
@@ -822,7 +822,7 @@ export const APP_JS = String.raw`
 
   function IndustryBubbleTooltip(props) {
     var node = props.node;
-    return h("div", { className: props.inline ? "industry-bubble-tooltip inline tooltip-" + (props.placement || "center") : "industry-bubble-tooltip" },
+    return h("div", { className: props.inline ? "industry-bubble-tooltip inline tooltip-" + (props.placement || "center") + " tooltip-" + (props.vertical || "above") : "industry-bubble-tooltip" },
       h("strong", null, node.company),
       h("p", null, "실적 " + formatIndustryNumber(node.total.actual)),
       h("p", null, "목표 " + formatIndustryNumber(node.total.target) + " · 달성률 " + formatIndustryPercent(node.total.actual, node.total.target)),
