@@ -522,6 +522,17 @@ export const APP_JS = String.raw`
     var segmentState = React.useState("총계");
     var segment = segmentState[0];
     var setSegment = segmentState[1];
+    var selectCompany = function (nextCompany) {
+      if (nextCompany !== "전체" && company === "전체" && window.history && window.history.pushState) {
+        window.history.pushState({ insightBoardIndustryDetail: true }, "", window.location.href);
+      }
+      setCompany(nextCompany);
+    };
+    React.useEffect(function () {
+      var returnToOverview = function () { setCompany("전체"); };
+      window.addEventListener("popstate", returnToOverview);
+      return function () { window.removeEventListener("popstate", returnToOverview); };
+    }, []);
     var years = Array.from(new Set(records.map(function (row) { return String(row.report_year); }))).sort();
     var companies = Array.from(new Set(records.map(function (row) { return row.company; }))).sort(function (a, b) { return a.localeCompare(b, "ko"); });
     var availableMonths = Array.from(new Set(records.filter(function (row) { return String(row.report_year) === String(year); }).map(function (row) { return Number(row.report_month); }))).sort(function (a, b) { return a - b; });
@@ -567,7 +578,7 @@ export const APP_JS = String.raw`
           h("label", null, "월", h("select", { value: String(Number(month)), onChange: function (event) { setMonth(event.target.value); } },
             availableMonths.map(function (value) { return h("option", { key: value, value: value }, value + "월"); })
           )),
-          h("label", null, "회원사", h("select", { value: company, onChange: function (event) { setCompany(event.target.value); } },
+          h("label", null, "회원사", h("select", { value: company, onChange: function (event) { selectCompany(event.target.value); } },
             ["전체"].concat(companies).map(function (value) { return h("option", { key: value, value: value }, value); })
           )),
           h("label", null, "사업구분", h("select", { value: segment, onChange: function (event) { setSegment(event.target.value); } },
@@ -578,17 +589,19 @@ export const APP_JS = String.raw`
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사 실적 맵", subtitle: segment === "총계" ? "도넛 크기는 실제 실적, 내부 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "버블 크기는 선택한 사업구분의 실제 실적입니다.", pill: formatIndustryPeriod(year, month) }),
-          h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: setCompany })
+          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "사각형 너비는 선택한 사업구분의 실제 실적입니다.", pill: formatIndustryPeriod(year, month) }),
+          h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
-        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: segment }),
-          h(IndustryCompanyTable, { records: records, year: year, month: month, segment: segment })
-        )),
-        h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본에 입력된 당월 비고입니다.", pill: notes.length ? notes.length + "건" : "" }),
-          h(IndustryNotes, { notes: notes })
-        ))
+        h("section", { className: "industry-overview-grid" },
+          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+            h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: segment }),
+            h(IndustryCompanyTable, { records: records, year: year, month: month, segment: segment })
+          )),
+          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+            h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본에 입력된 당월 비고입니다.", pill: notes.length ? notes.length + "건" : "" }),
+            h(IndustryNotes, { notes: notes })
+          ))
+        )
       ) : h(React.Fragment, null,
         h("section", { className: "industry-kpi-grid" },
           h(IndustryKpi, { label: "당월 실적", value: formatIndustryNumber(current.actual), foot: "목표 " + formatIndustryNumber(current.target) }),
@@ -683,11 +696,11 @@ export const APP_JS = String.raw`
     return h("div", { className: "industry-treemap-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
       h("div", { className: "industry-treemap" }, layout.map(function (group, groupIndex) {
-        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: group.total || 1 } }, group.items.map(function (node) {
+        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: 1 } }, group.items.map(function (node) {
           return h("button", {
             type: "button",
             key: node.company,
-            className: node.company === "동아ST" ? "treemap-tile donga" : "treemap-tile",
+            className: treemapTileClass(node, props.segment, group.total),
             style: { flexGrow: Math.max(0.003, node.total.actual || 0), background: industryTreemapBackground(node, props.segment) },
             onMouseEnter: function () { setHovered(node); },
             onMouseLeave: function () { setHovered(null); },
@@ -771,6 +784,13 @@ export const APP_JS = String.raw`
   function industryTreemapBackground(node, segment) {
     if (segment !== "총계") return segmentColor(segment);
     return "linear-gradient(145deg, rgba(248,232,231,0.94), rgba(255,255,255,0.86))";
+  }
+
+  function treemapTileClass(node, segment, groupTotal) {
+    var share = Number(node.total.actual || 0) / Math.max(1, Number(groupTotal || 0));
+    var density = share < 0.09 ? " tile-tiny" : share < 0.16 ? " tile-small" : "";
+    var contrast = segment === "ETC" || segment === "OTC" ? " contrast-light" : "";
+    return "treemap-tile" + (node.company === "동아ST" ? " donga" : "") + density + contrast;
   }
 
   function segmentColor(segment) {

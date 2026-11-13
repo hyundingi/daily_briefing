@@ -218,6 +218,7 @@ button { border: 0; cursor: pointer; }
 .achievement-column.donga > i { background: linear-gradient(180deg, #5798d6, #2362a2); }
 .industry-month-bar small { color: var(--muted); font-size: 11px; font-weight: 800; }
 .industry-detail-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 18px; }
+.industry-overview-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); gap: 18px; align-items: start; }
 .industry-segment-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
 .industry-segment-grid article { min-width: 0; padding: 14px; border: 1px solid rgba(234,223,221,0.8); border-radius: 18px; background: rgba(248,232,231,0.48); }
 .industry-segment-grid span { display: block; color: var(--primary-900); font-size: 12px; font-weight: 950; }
@@ -235,9 +236,14 @@ button { border: 0; cursor: pointer; }
 .treemap-row { min-height: 0; display: flex; gap: 5px; }
 .treemap-tile { position: relative; min-width: 0; min-height: 0; flex-basis: 0; overflow: visible; display: grid; align-content: center; justify-items: start; gap: 4px; padding: 12px; border: 0; border-radius: 13px; color: var(--ink); text-align: left; box-shadow: inset 0 0 0 1px rgba(148,64,60,0.1); transition: transform .2s ease, box-shadow .2s ease, filter .2s ease; }
 .treemap-tile:hover, .treemap-tile:focus-visible { z-index: 20; transform: scale(1.025); box-shadow: 0 14px 30px rgba(111,48,45,0.2), inset 0 0 0 2px rgba(148,64,60,0.26); filter: saturate(1.05); outline: none; }
-.treemap-tile > strong { display: block; max-width: 100%; color: var(--primary-900); font-size: clamp(9px, 1.05vw, 16px); font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; word-break: keep-all; }
-.treemap-tile > span { color: #675b5a; font-size: clamp(9px, .86vw, 13px); font-weight: 850; white-space: nowrap; }
+.treemap-tile > strong { display: block; max-width: 100%; color: var(--primary-900); font-size: 13px; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; word-break: keep-all; }
+.treemap-tile > span { color: #675b5a; font-size: 11px; font-weight: 850; white-space: nowrap; }
 .treemap-tile.donga > strong { color: #2f6fb3; }
+.treemap-tile.tile-small > strong { font-size: 11px; }
+.treemap-tile.tile-small > span { font-size: 10px; }
+.treemap-tile.tile-tiny > strong { font-size: 9px; }
+.treemap-tile.tile-tiny > span { font-size: 8px; }
+.treemap-tile.contrast-light > strong, .treemap-tile.contrast-light > span { color: #fff; text-shadow: 0 1px 2px rgba(72,27,25,.25); }
 .treemap-segments { position: absolute; right: 0; bottom: 0; left: 0; height: 10px; border-radius: 0 0 13px 13px; box-shadow: inset 0 1px rgba(255,255,255,0.48); }
 .industry-bubble-tooltip { position: absolute; z-index: 50; min-width: 215px; max-width: 260px; padding: 14px; border: 1px solid rgba(148,64,60,0.2); border-radius: 18px; background: rgba(255,255,255,0.98); box-shadow: 0 18px 40px rgba(72,44,42,0.24); pointer-events: none; }
 .industry-bubble-tooltip.inline { top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -557,7 +563,7 @@ button { border: 0; cursor: pointer; }
   .topbar, .panel-head { display: block; }
   .topbar-actions { justify-content: flex-start; margin-top: 12px; }
   .updated-chip { display: inline-flex; margin-top: 12px; }
-  .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .content-toolbar.news-toolbar, .cash-grid, .news-grid, .disclosure-grid, .finance-summary-grid, .industry-kpi-grid, .industry-segment-grid { grid-template-columns: 1fr; }
+  .nav-group, .dashboard-grid, .kpi-grid, .division-grid, .content-toolbar, .content-toolbar.news-toolbar, .cash-grid, .news-grid, .disclosure-grid, .finance-summary-grid, .industry-kpi-grid, .industry-segment-grid, .industry-overview-grid { grid-template-columns: 1fr; }
   .finance-bars-head { display: none; }
   .finance-bar-row { grid-template-columns: 1fr; align-items: stretch; }
   .finance-bar-cell { grid-template-columns: minmax(90px, 1fr) 70px; }
