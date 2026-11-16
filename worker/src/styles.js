@@ -200,11 +200,21 @@ button { border: 0; cursor: pointer; }
 .industry-target-line { position: absolute; top: 18px; right: 0; left: 0; width: 100%; height: calc(100% - 42px); z-index: 3; overflow: visible; pointer-events: none; clip-path: inset(0 100% 0 0); animation: targetLineReveal .72s cubic-bezier(.2,.8,.2,1) .08s forwards; }
 .industry-target-line polyline { fill: none; stroke: var(--primary-900); stroke-width: 2.2; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
 .industry-target-line ellipse { fill: #fff; stroke: var(--primary-900); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
-.industry-month-bar { position: relative; z-index: 2; min-width: 0; height: 100%; display: grid; grid-template-rows: 1fr 24px; gap: 6px; align-items: end; text-align: center; }
+.industry-month-bar { position: relative; z-index: 2; min-width: 0; height: 100%; display: grid; grid-template-rows: 1fr 24px; gap: 6px; align-items: end; padding: 0; border: 0; background: transparent; color: inherit; text-align: center; }
+.industry-month-bar.active::before { content: ""; position: absolute; inset: 0 2px 20px; border-radius: 10px 10px 3px 3px; background: rgba(148,64,60,.08); }
+.industry-month-bar:focus-visible { outline: 2px solid var(--primary-500); outline-offset: 2px; border-radius: 10px; }
 .industry-bar-pair { height: 100%; display: flex; align-items: end; justify-content: center; }
 .industry-stack { width: min(24px, 62%); height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; overflow: hidden; border-radius: 7px 7px 2px 2px; box-shadow: 0 5px 13px rgba(111,48,45,0.08); }
 .industry-stack i { display: block; min-height: 0; transform-origin: bottom; animation: stackRise .62s cubic-bezier(.2,.8,.2,1) both; }
 .industry-month-bar small { color: var(--muted); font-size: 11px; font-weight: 800; }
+.industry-month-focus { display: grid; gap: 9px; margin-top: 14px; padding: 13px 14px; border: 1px solid rgba(234,223,221,.9); border-radius: 16px; background: rgba(255,255,255,.72); }
+.industry-month-focus-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 14px; }
+.industry-month-focus-head strong { color: var(--primary-900); font-size: 14px; font-weight: 950; }
+.industry-month-focus-head span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.industry-month-segments { display: flex; flex-wrap: wrap; gap: 7px; }
+.industry-month-segments span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 11px; font-weight: 850; }
+.industry-month-segments i { width: 8px; height: 8px; border-radius: 50%; }
+.industry-month-focus > p { margin: 0; color: #5f5655; font-size: 12px; font-weight: 750; line-height: 1.5; }
 .industry-company-chart-scroll { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; scrollbar-color: rgba(148,64,60,0.38) transparent; }
 .industry-company-chart, .industry-achievement-chart { position: relative; padding: 6px 4px 0; }
 .industry-company-chart .industry-chart-legend { margin: 0 4px 10px; }
