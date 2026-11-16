@@ -704,11 +704,11 @@ export const APP_JS = String.raw`
     var rows = companies.map(function (company) {
       var allRecords = industryRowsFor(props.records, props.year, props.month, company, "총계");
       var selectedRecords = industryRowsFor(props.records, props.year, props.month, company, props.segment);
-      var allTotal = aggregateIndustryRows(allRecords);
+      var selectedTotal = aggregateIndustryRows(selectedRecords);
       return {
         company: company,
-        total: aggregateIndustryRows(selectedRecords),
-        sizeActual: Number(allTotal.actual || 0),
+        total: selectedTotal,
+        sizeActual: Number(selectedTotal.actual || 0),
         segments: industrySegments(allRecords)
       };
     }).sort(function (a, b) { return b.sizeActual - a.sizeActual; });
@@ -725,7 +725,7 @@ export const APP_JS = String.raw`
             type: "button",
             key: node.company,
             className: treemapTileClass(node, props.segment, group.total),
-            style: { flexGrow: Math.max(0.003, node.total.actual || 0), background: industryTreemapBackground(node, props.segment) },
+            style: { flexGrow: Number(node.total.actual || 0) > 0 ? Number(node.total.actual) : 1, background: industryTreemapBackground(node, props.segment) },
             onMouseEnter: function () { setHovered(node); },
             onMouseLeave: function () { setHovered(null); },
             onFocus: function () { setHovered(node); },
@@ -733,8 +733,10 @@ export const APP_JS = String.raw`
             onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
             "aria-label": node.company + " 실적 상세 보기"
           },
-            h("strong", null, node.company),
-            h("span", null, formatTreemapValue(node.total.actual)),
+            h("div", { className: "treemap-tile-content" },
+              h("strong", null, node.company),
+              h("span", null, formatTreemapValue(node.total.actual))
+            ),
             props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
             hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
           );
@@ -779,14 +781,22 @@ export const APP_JS = String.raw`
   }
 
   function buildIndustryTreemap(rows, groupCount) {
-    var groups = Array.from({ length: groupCount }, function () { return { total: 0, items: [] }; });
-    rows.slice().sort(function (a, b) { return (b.sizeActual || 0) - (a.sizeActual || 0); }).forEach(function (row) {
+    var positiveRows = rows.filter(function (row) { return Number(row.sizeActual || 0) > 0; });
+    var emptyRows = rows.filter(function (row) { return Number(row.sizeActual || 0) <= 0; });
+    var groups = Array.from({ length: emptyRows.length ? Math.max(1, groupCount - 1) : groupCount }, function () { return { total: 0, items: [] }; });
+    positiveRows.slice().sort(function (a, b) { return (b.sizeActual || 0) - (a.sizeActual || 0); }).forEach(function (row) {
       var group = groups.slice().sort(function (a, b) {
         return (a.total - b.total) || (a.items.length - b.items.length);
       })[0];
       group.items.push(row);
       group.total += Math.max(0, Number(row.sizeActual || 0));
     });
+    if (emptyRows.length) {
+      groups.push({
+        total: 0,
+        items: emptyRows.sort(function (a, b) { return a.company.localeCompare(b.company, "ko"); })
+      });
+    }
     return groups.filter(function (group) { return group.items.length; }).map(function (group) {
       group.items.sort(function (a, b) { return (b.sizeActual || 0) - (a.sizeActual || 0); });
       return group;
@@ -812,7 +822,7 @@ export const APP_JS = String.raw`
 
   function treemapTileClass(node, segment, groupTotal) {
     var share = Number(node.sizeActual || 0) / Math.max(1, Number(groupTotal || 0));
-    var density = share < 0.09 ? " tile-tiny" : share < 0.16 ? " tile-small" : "";
+    var density = share < 0.025 ? " tile-tiny" : share < 0.06 ? " tile-small" : "";
     var contrast = segment === "ETC" || segment === "OTC" ? " contrast-light" : "";
     return "treemap-tile" + (node.company === "동아ST" ? " donga" : "") + density + contrast;
   }
@@ -900,7 +910,7 @@ export const APP_JS = String.raw`
   }
 
   function formatTreemapValue(value) {
-    return value === null || value === undefined || !isFinite(value) ? "0 · 값 없음" : formatIndustryNumber(value);
+    return value === null || value === undefined || !isFinite(value) || Number(value) === 0 ? "0 · 값 없음" : formatIndustryNumber(value);
   }
 
   function formatIndustryPercent(actual, target) {
