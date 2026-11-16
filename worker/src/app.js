@@ -516,18 +516,23 @@ export const APP_JS = String.raw`
     var monthState = React.useState(initialParts[1] || "");
     var month = monthState[0];
     var setMonth = monthState[1];
-    var companyState = React.useState(function () {
-      return records.some(function (row) { return row.company === "동아ST"; }) ? "동아ST" : "전체";
-    });
+    var companyState = React.useState("전체");
     var company = companyState[0];
     var setCompany = companyState[1];
     var segmentState = React.useState("총계");
     var segment = segmentState[0];
     var setSegment = segmentState[1];
-    var segmentControl = h("label", { className: "industry-segment-select" }, "사업구분",
-      h("select", { value: segment, onChange: function (event) { setSegment(event.target.value); } },
-        ["총계", "ETC", "OTC", "수출", "기타"].map(function (value) { return h("option", { key: value, value: value }, value); })
-      )
+    var segmentControl = h("div", { className: "industry-segment-tabs", role: "tablist", "aria-label": "사업구분 선택" },
+      ["총계", "ETC", "OTC", "수출", "기타"].map(function (value) {
+        return h("button", {
+          type: "button",
+          key: value,
+          role: "tab",
+          "aria-selected": segment === value,
+          className: segment === value ? "active" : "",
+          onClick: function () { setSegment(value); }
+        }, value);
+      })
     );
     var selectCompany = function (nextCompany) {
       if (nextCompany !== "전체" && company === "전체" && window.history && window.history.pushState) {

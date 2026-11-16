@@ -174,8 +174,10 @@ button { border: 0; cursor: pointer; }
 .industry-toolbar label { display: grid; gap: 6px; color: var(--primary-900); font-size: 11px; font-weight: 950; }
 .industry-toolbar select { min-width: 106px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px; outline: none; color: var(--ink); background: rgba(255,255,255,0.92); font-size: 13px; font-weight: 750; }
 .industry-toolbar label:nth-child(3) select { min-width: 148px; }
-.industry-segment-select { display: inline-flex; align-items: center; gap: 7px; color: var(--primary-900); font-size: 11px; font-weight: 950; white-space: nowrap; }
-.industry-segment-select select { min-width: 82px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 10px; outline: none; color: var(--ink); background: rgba(255,255,255,.94); font-size: 12px; font-weight: 800; }
+.industry-segment-tabs { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid rgba(234,223,221,.96); border-radius: 12px; background: rgba(255,255,255,.88); }
+.industry-segment-tabs button { min-width: 38px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 900; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+.industry-segment-tabs button:hover { color: var(--primary-900); background: var(--primary-50); }
+.industry-segment-tabs button.active { background: var(--primary-800); color: #fff; box-shadow: 0 4px 10px rgba(111,48,45,.18); }
 .industry-updated { margin: 0 0 2px auto; color: var(--muted); font-size: 12px; font-weight: 750; }
 .industry-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .industry-kpi-card { padding: 17px; border: 1px solid rgba(255,255,255,0.92); border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
@@ -599,8 +601,7 @@ button { border: 0; cursor: pointer; }
   .finance-row { grid-template-columns: 1fr; }
   .industry-toolbar { align-items: stretch; }
   .industry-toolbar label, .industry-toolbar select { width: 100%; }
-  .industry-segment-select { width: auto !important; }
-  .industry-segment-select select { width: auto !important; }
+  .industry-segment-tabs { max-width: 100%; overflow-x: auto; }
   .industry-updated { margin: 0; }
   .industry-monthly-chart { gap: 3px; }
   .industry-chart-with-axis { grid-template-columns: 39px minmax(0, 1fr); gap: 4px; }
