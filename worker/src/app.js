@@ -551,9 +551,6 @@ export const APP_JS = String.raw`
     React.useEffect(function () {
       if (availableMonths.length && availableMonths.indexOf(Number(month)) < 0) setMonth(String(availableMonths[availableMonths.length - 1]));
     }, [year, records.length]);
-    var selectedRows = industryRowsFor(records, year, month, company, segment);
-    var notes = selectedRows.filter(function (row) { return row.note; });
-
     if (!records.length) return h("section", { className: "panel" }, h("div", { className: "panel-inner" },
       h(PanelHead, { title: "약기회 실적", subtitle: "사내 폴더의 월별 취합 엑셀을 로컬 수집기로 반영합니다." }),
       h("div", { className: "report-empty" }, h("strong", null, "아직 반영된 약기회 실적이 없습니다."), h("p", null, "로컬 수집기에서 2026년 취합본을 반영하면 월별·회원사별·사업구분별 그래프가 표시됩니다."))
@@ -582,21 +579,15 @@ export const APP_JS = String.raw`
           h("p", { className: "industry-updated" }, performance.updated_at ? "최근 반영 " + formatDateTime(performance.updated_at) : "")
         )
       )),
-      company === "전체" ? h(React.Fragment, null,
-        h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
+      company === "전체" ? h("section", { className: "industry-overview-grid" },
+        h("div", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
           h(PanelHead, { title: "회원사 실적 비교 그래프", subtitle: segment === "총계" ? "막대 길이는 실제 실적, 막대 안의 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "막대 길이는 선택한 사업구분의 실제 실적입니다. 0값 회사는 목록 아래에 표시됩니다.", pill: formatIndustryPeriod(year, month), actions: segmentControl }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
-        h("section", { className: "industry-overview-grid" },
-          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
-            h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: formatIndustryPeriod(year, month) + " · " + segment }),
-            h(IndustryCompanyTable, { records: records, year: year, month: month, segment: segment })
-          )),
-          h("div", { className: "panel" }, h("div", { className: "panel-inner" },
-            h(PanelHead, { title: "증감 사유", subtitle: "원본 취합본에 입력된 당월 비고입니다.", pill: notes.length ? notes.length + "건" : "" }),
-            h(IndustryNotes, { notes: notes })
-          ))
-        )
+        h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+          h(PanelHead, { title: "누적 실적", subtitle: "선택한 월까지의 누적 실적과 목표 달성률입니다.", pill: year + "년 1~" + Number(month) + "월 · " + segment }),
+          h(IndustryCumulativeCompanyList, { records: records, year: year, throughMonth: month, segment: segment, onSelectCompany: selectCompany })
+        ))
       ) : h(React.Fragment, null,
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
           h(PanelHead, { title: company + " 연간 실적 추이", subtitle: segment === "총계" ? "실적 막대는 사업구분별 누적값이며, 점선은 총 목표입니다. 월별 막대를 누르거나 올리면 상세를 확인할 수 있습니다." : segment + " 실제 실적과 목표를 비교합니다. 월별 막대를 누르거나 올리면 상세를 확인할 수 있습니다.", pill: year + "년 1~" + availableMonths[availableMonths.length - 1] + "월 반영", actions: segmentControl }),
@@ -771,6 +762,32 @@ export const APP_JS = String.raw`
         );
       })
     );
+  }
+
+  function IndustryCumulativeCompanyList(props) {
+    var companies = Array.from(new Set((props.records || []).filter(function (row) {
+      return String(row.report_year) === String(props.year) && Number(row.report_month) <= Number(props.throughMonth);
+    }).map(function (row) { return row.company; })));
+    var rows = companies.map(function (company) {
+      var total = aggregateIndustryRows((props.records || []).filter(function (row) {
+        return String(row.report_year) === String(props.year) && Number(row.report_month) <= Number(props.throughMonth) &&
+          row.company === company && (props.segment === "총계" || row.business_segment === props.segment);
+      }));
+      return { company: company, total: total };
+    }).sort(function (a, b) { return Number(b.total.actual || 0) - Number(a.total.actual || 0); });
+    return h("div", { className: "industry-cumulative-list" }, rows.map(function (row) {
+      return h("button", {
+        type: "button",
+        key: row.company,
+        className: row.company === "동아ST" ? "industry-cumulative-row donga" : "industry-cumulative-row",
+        onClick: function () { if (props.onSelectCompany) props.onSelectCompany(row.company); },
+        "aria-label": row.company + " 연간 실적 상세 보기"
+      },
+        h("strong", null, row.company),
+        h("span", null, formatTreemapValue(row.total.actual)),
+        h("em", null, formatIndustryPercent(row.total.actual, row.total.target))
+      );
+    }));
   }
 
   function IndustryLegend(props) {
