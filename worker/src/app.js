@@ -680,8 +680,12 @@ export const APP_JS = String.raw`
       ),
       h("section", { className: "industry-month-focus" },
           h("div", { className: "industry-month-focus-head" },
-            h("strong", null, focusMonth + "월 상세"),
-            h("span", null, "실적 " + formatTreemapValue(focusedTotal.actual) + " · 목표 " + formatTreemapValue(focusedTotal.target) + " · 달성률 " + formatIndustryPercent(focusedTotal.actual, focusedTotal.target))
+            h("strong", null, focusMonth + "월 상세")
+          ),
+          h("div", { className: "industry-month-kpis" },
+            h("article", null, h("span", null, "당월 실적"), h("strong", null, formatTreemapValue(focusedTotal.actual))),
+            h("article", null, h("span", null, "당월 목표"), h("strong", null, formatTreemapValue(focusedTotal.target))),
+            h("article", { className: "achievement" }, h("span", null, "목표 달성률"), h("strong", null, formatIndustryPercent(focusedTotal.actual, focusedTotal.target)))
           ),
           h("div", { className: "industry-month-segments" }, ["ETC", "OTC", "수출", "기타"].map(function (name) {
             return h("span", { key: name }, h("i", { style: { backgroundColor: segmentColor(name) } }), name + " " + formatTreemapValue(focusedSegments[name]));

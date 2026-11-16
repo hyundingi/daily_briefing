@@ -210,7 +210,12 @@ button { border: 0; cursor: pointer; }
 .industry-month-focus { display: grid; gap: 9px; margin-top: 14px; padding: 13px 14px; border: 1px solid rgba(234,223,221,.9); border-radius: 16px; background: rgba(255,255,255,.72); }
 .industry-month-focus-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 14px; }
 .industry-month-focus-head strong { color: var(--primary-900); font-size: 14px; font-weight: 950; }
-.industry-month-focus-head span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.industry-month-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.industry-month-kpis article { min-width: 0; padding: 10px 11px; border: 1px solid rgba(234,223,221,.9); border-radius: 12px; background: rgba(248,232,231,.52); }
+.industry-month-kpis article.achievement { background: rgba(148,64,60,.08); border-color: rgba(148,64,60,.18); }
+.industry-month-kpis span { display: block; color: var(--muted); font-size: 10px; font-weight: 850; }
+.industry-month-kpis strong { display: block; margin-top: 4px; overflow: hidden; color: var(--primary-900); font-size: 16px; font-weight: 950; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
+.industry-month-kpis .achievement strong { color: var(--primary-800); }
 .industry-month-segments { display: flex; flex-wrap: wrap; gap: 7px; }
 .industry-month-segments span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 999px; background: var(--primary-50); color: var(--primary-900); font-size: 11px; font-weight: 850; }
 .industry-month-segments i { width: 8px; height: 8px; border-radius: 50%; }
@@ -616,6 +621,7 @@ button { border: 0; cursor: pointer; }
   .industry-monthly-chart { gap: 3px; }
   .industry-chart-with-axis { grid-template-columns: 39px minmax(0, 1fr); gap: 4px; }
   .industry-chart-axis { font-size: 8px; }
+  .industry-month-kpis { grid-template-columns: 1fr; }
   .industry-company-bar { grid-template-columns: 104px minmax(0, 1fr) 68px; gap: 7px; padding: 5px; }
   .industry-company-bar > strong { font-size: 11px; }
   .industry-company-bar > span { font-size: 10px; }
