@@ -189,9 +189,9 @@ button { border: 0; cursor: pointer; }
 .industry-chart-legend i.target { width: 15px; height: 0; border-radius: 0; border-top: 2px dashed var(--primary-900); }
 .industry-chart-legend i.actual { background: var(--primary-800); }
 .industry-chart-legend i.etc, .stack-etc { background: #94403c; }
-.industry-chart-legend i.otc, .stack-otc { background: #dd7f78; }
-.industry-chart-legend i.export, .stack-export { background: #c79653; }
-.industry-chart-legend i.other, .stack-other { background: #8c8582; }
+.industry-chart-legend i.otc, .stack-otc { background: #bc625d; }
+.industry-chart-legend i.export, .stack-export { background: #dc928d; }
+.industry-chart-legend i.other, .stack-other { background: #9f7a76; }
 .industry-monthly-chart { position: relative; height: 275px; display: grid; grid-template-columns: repeat(12, minmax(22px, 1fr)); gap: 7px; align-items: end; padding-top: 18px; background: repeating-linear-gradient(to bottom, transparent 0 58px, rgba(117,111,111,0.1) 59px); border-bottom: 1px solid var(--line); }
 .industry-target-line { position: absolute; top: 18px; right: 0; left: 0; width: 100%; height: calc(100% - 42px); z-index: 3; overflow: visible; pointer-events: none; }
 .industry-target-line polyline { fill: none; stroke: var(--primary-900); stroke-width: 2.2; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
@@ -242,7 +242,7 @@ button { border: 0; cursor: pointer; }
 .industry-company-bar > strong { overflow: hidden; color: var(--primary-900); font-size: 13px; font-weight: 900; white-space: nowrap; text-overflow: ellipsis; }
 .industry-company-bar.donga > strong { color: #2f6fb3; }
 .industry-company-bar > span { color: var(--muted); font-size: 12px; font-weight: 850; text-align: right; }
-.industry-company-bar-track { height: 15px; overflow: hidden; border-radius: 999px; background: rgba(234,223,221,.86); box-shadow: inset 0 1px 2px rgba(102,71,69,.08); }
+.industry-company-bar-track { height: 15px; overflow: hidden; border-radius: 999px; background: rgba(239,232,231,.9); box-shadow: inset 0 1px 2px rgba(102,71,69,.08); }
 .industry-company-bar-fill { display: block; height: 100%; min-width: 2px; border-radius: inherit; transition: width .3s ease; }
 .industry-company-bar-fill.stacked { box-shadow: inset 0 1px rgba(255,255,255,.35); }
 .industry-treemap { height: 580px; display: flex; flex-direction: column; gap: 5px; }

@@ -826,7 +826,7 @@ export const APP_JS = String.raw`
   }
 
   function segmentColor(segment) {
-    return { "ETC": "#94403c", "OTC": "#bc625d", "수출": "#dc928d", "기타": "#ead1cf" }[segment] || "#94403c";
+    return { "ETC": "#94403c", "OTC": "#bc625d", "수출": "#dc928d", "기타": "#9f7a76" }[segment] || "#94403c";
   }
 
   function IndustryBubbleTooltip(props) {
