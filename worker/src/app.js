@@ -589,7 +589,7 @@ export const APP_JS = String.raw`
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "행의 세로 길이와 회사 위치는 유지하며, 사각형 너비는 선택한 사업구분의 실제 실적에 따라 표시합니다.", pill: formatIndustryPeriod(year, month) }),
+          h(PanelHead, { title: "회원사 실적 비교 그래프", subtitle: segment === "총계" ? "막대 길이는 실제 실적, 막대 안의 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "막대 길이는 선택한 사업구분의 실제 실적입니다. 0값 회사는 목록 아래에 표시됩니다.", pill: formatIndustryPeriod(year, month) }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
         h("section", { className: "industry-overview-grid" },
@@ -702,8 +702,8 @@ export const APP_JS = String.raw`
       return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month));
     }).map(function (row) { return row.company; })));
     var rows = companies.map(function (company) {
-      var allRecords = industryRowsFor(props.records, props.year, props.month, company, "총계");
       var selectedRecords = industryRowsFor(props.records, props.year, props.month, company, props.segment);
+      var allRecords = industryRowsFor(props.records, props.year, props.month, company, "총계");
       var selectedTotal = aggregateIndustryRows(selectedRecords);
       return {
         company: company,
@@ -712,35 +712,27 @@ export const APP_JS = String.raw`
         segments: industrySegments(allRecords)
       };
     }).sort(function (a, b) { return b.sizeActual - a.sizeActual; });
-    var hoverState = React.useState(null);
-    var hovered = hoverState[0];
-    var setHovered = hoverState[1];
     if (!rows.length) return h("div", { className: "empty compact" }, "선택한 조건의 실적 데이터가 없습니다.");
-    var layout = buildIndustryTreemap(rows, 5);
-    return h("div", { className: "industry-treemap-wrap" },
+    var maximum = Math.max.apply(null, rows.map(function (row) { return Number(row.total.actual || 0); }).concat([1]));
+    return h("div", { className: "industry-company-bars-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
-      h("div", { className: "industry-treemap" }, layout.map(function (group, groupIndex) {
-        return h("div", { className: "treemap-row", key: groupIndex, style: { flexGrow: 1 } }, group.items.map(function (node, index) {
-          return h("button", {
-            type: "button",
-            key: node.company,
-            className: treemapTileClass(node, props.segment, group.total),
-            style: { flexGrow: Number(node.total.actual || 0) > 0 ? Number(node.total.actual) : 1, background: industryTreemapBackground(node, props.segment) },
-            onMouseEnter: function () { setHovered(node); },
-            onMouseLeave: function () { setHovered(null); },
-            onFocus: function () { setHovered(node); },
-            onBlur: function () { setHovered(null); },
-            onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
-            "aria-label": node.company + " 실적 상세 보기"
-          },
-            h("div", { className: "treemap-tile-content" },
-              h("strong", null, node.company),
-              h("span", null, formatTreemapValue(node.total.actual))
-            ),
-            props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
-            hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
-          );
-        }));
+      h("div", { className: "industry-company-bars" }, rows.map(function (node) {
+        var percent = Math.max(0, Number(node.total.actual || 0)) / maximum * 100;
+        return h("button", {
+          type: "button",
+          key: node.company,
+          className: node.company === "동아ST" ? "industry-company-bar donga" : "industry-company-bar",
+          onClick: function () { if (props.onSelectCompany) props.onSelectCompany(node.company); },
+          "aria-label": node.company + " 실적 상세 보기"
+        },
+          h("strong", null, node.company),
+          h("div", { className: "industry-company-bar-track", title: node.company + " · 실적 " + formatTreemapValue(node.total.actual) },
+            props.segment === "총계"
+              ? h("i", { className: "industry-company-bar-fill stacked", style: { width: percent + "%", background: industryBubbleBackground(node, props.segment) } })
+              : h("i", { className: "industry-company-bar-fill", style: { width: percent + "%", background: segmentColor(props.segment) } })
+          ),
+          h("span", null, formatTreemapValue(node.total.actual))
+        );
       }))
     );
   }
