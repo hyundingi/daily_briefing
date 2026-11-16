@@ -516,12 +516,19 @@ export const APP_JS = String.raw`
     var monthState = React.useState(initialParts[1] || "");
     var month = monthState[0];
     var setMonth = monthState[1];
-    var companyState = React.useState("전체");
+    var companyState = React.useState(function () {
+      return records.some(function (row) { return row.company === "동아ST"; }) ? "동아ST" : "전체";
+    });
     var company = companyState[0];
     var setCompany = companyState[1];
     var segmentState = React.useState("총계");
     var segment = segmentState[0];
     var setSegment = segmentState[1];
+    var segmentControl = h("label", { className: "industry-segment-select" }, "사업구분",
+      h("select", { value: segment, onChange: function (event) { setSegment(event.target.value); } },
+        ["총계", "ETC", "OTC", "수출", "기타"].map(function (value) { return h("option", { key: value, value: value }, value); })
+      )
+    );
     var selectCompany = function (nextCompany) {
       if (nextCompany !== "전체" && company === "전체" && window.history && window.history.pushState) {
         window.history.pushState({ insightBoardIndustryDetail: true }, "", window.location.href);
@@ -581,15 +588,12 @@ export const APP_JS = String.raw`
           h("label", null, "회원사", h("select", { value: company, onChange: function (event) { selectCompany(event.target.value); } },
             ["전체"].concat(companies).map(function (value) { return h("option", { key: value, value: value }, value); })
           )),
-          h("label", null, "사업구분", h("select", { value: segment, onChange: function (event) { setSegment(event.target.value); } },
-            ["총계", "ETC", "OTC", "수출", "기타"].map(function (value) { return h("option", { key: value, value: value }, value); })
-          )),
           h("p", { className: "industry-updated" }, performance.updated_at ? "최근 반영 " + formatDateTime(performance.updated_at) : "")
         )
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사 실적 비교 그래프", subtitle: segment === "총계" ? "막대 길이는 실제 실적, 막대 안의 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "막대 길이는 선택한 사업구분의 실제 실적입니다. 0값 회사는 목록 아래에 표시됩니다.", pill: formatIndustryPeriod(year, month) }),
+          h(PanelHead, { title: "회원사 실적 비교 그래프", subtitle: segment === "총계" ? "막대 길이는 실제 실적, 막대 안의 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "막대 길이는 선택한 사업구분의 실제 실적입니다. 0값 회사는 목록 아래에 표시됩니다.", pill: formatIndustryPeriod(year, month), actions: segmentControl }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
         h("section", { className: "industry-overview-grid" },
@@ -610,7 +614,7 @@ export const APP_JS = String.raw`
           h(IndustryKpi, { label: "전년 동월 대비", value: formatChange(yoy), foot: previous.actual !== null ? "전년 동월 " + formatIndustryNumber(previous.actual) : "비교 데이터 없음", className: changeClass(yoy) })
         ),
         h("section", { className: "panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: company + " 월별 실적 추이", subtitle: segment === "총계" ? "실적 막대는 사업구분별 누적값이며, 점선은 총 목표입니다." : segment + " 실제 실적과 목표를 비교합니다.", pill: year + "년 1~" + Number(month) + "월" }),
+          h(PanelHead, { title: company + " 월별 실적 추이", subtitle: segment === "총계" ? "실적 막대는 사업구분별 누적값이며, 점선은 총 목표입니다." : segment + " 실제 실적과 목표를 비교합니다.", pill: year + "년 1~" + Number(month) + "월", actions: segmentControl }),
           h(IndustryMonthlyChart, { records: records, year: year, throughMonth: month, company: company, segment: segment })
         )),
         h("section", { className: "industry-detail-grid" },
@@ -655,18 +659,19 @@ export const APP_JS = String.raw`
       return point.x.toFixed(1) + "," + point.y.toFixed(1);
     }).join(" ");
     var axisValues = [maximum, maximum * 2 / 3, maximum / 3, 0];
+    var chartKey = props.year + "-" + props.company + "-" + props.segment + "-" + values.map(function (row) { return String(row.total.actual) + ":" + String(row.total.target); }).join("|");
     return h("div", { className: "industry-chart-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계" }),
       h("div", { className: "industry-chart-with-axis" },
         h("div", { className: "industry-chart-axis", "aria-hidden": "true" }, axisValues.map(function (value, index) {
           return h("span", { key: index }, formatIndustryNumber(value));
         })),
-        h("div", { className: "industry-monthly-chart", style: { gridTemplateColumns: "repeat(" + values.length + ", minmax(22px, 1fr))" } },
+        h("div", { key: chartKey, className: "industry-monthly-chart", style: { gridTemplateColumns: "repeat(" + values.length + ", minmax(22px, 1fr))" } },
           h("svg", { className: "industry-target-line", viewBox: "0 0 " + (values.length * 100) + " 100", preserveAspectRatio: "none", "aria-hidden": "true" },
             h(React.Fragment, null,
               h("polyline", { points: targetPoints }),
               targetCoordinates.map(function (point, index) {
-                return h("circle", { key: index, cx: point.x, cy: point.y, r: 2.8 });
+                return h("ellipse", { key: index, cx: point.x, cy: point.y, rx: 2.8, ry: 1.38 });
               })
             )
           ),
@@ -716,7 +721,7 @@ export const APP_JS = String.raw`
     var maximum = Math.max.apply(null, rows.map(function (row) { return Number(row.total.actual || 0); }).concat([1]));
     return h("div", { className: "industry-company-bars-wrap" },
       h(IndustryLegend, { stacked: props.segment === "총계", withoutTarget: true }),
-      h("div", { className: "industry-company-bars" }, rows.map(function (node) {
+      h("div", { key: props.year + "-" + props.month + "-" + props.segment, className: "industry-company-bars" }, rows.map(function (node, index) {
         var percent = Math.max(0, Number(node.total.actual || 0)) / maximum * 100;
         return h("button", {
           type: "button",
@@ -728,8 +733,8 @@ export const APP_JS = String.raw`
           h("strong", null, node.company),
           h("div", { className: "industry-company-bar-track", title: node.company + " · 실적 " + formatTreemapValue(node.total.actual) },
             props.segment === "총계"
-              ? h("i", { className: "industry-company-bar-fill stacked", style: { width: percent + "%", background: industryBubbleBackground(node, props.segment) } })
-              : h("i", { className: "industry-company-bar-fill", style: { width: percent + "%", background: segmentColor(props.segment) } })
+              ? h("i", { className: "industry-company-bar-fill stacked", style: { width: percent + "%", background: industryBubbleBackground(node, props.segment), "--bar-delay": Math.min(index * 22, 400) + "ms" } })
+              : h("i", { className: "industry-company-bar-fill", style: { width: percent + "%", background: segmentColor(props.segment), "--bar-delay": Math.min(index * 22, 400) + "ms" } })
           ),
           h("span", null, formatTreemapValue(node.total.actual))
         );
