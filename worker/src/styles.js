@@ -237,7 +237,7 @@ button { border: 0; cursor: pointer; }
 .industry-treemap-wrap { position: relative; padding: 12px; border: 1px solid rgba(234,223,221,0.8); border-radius: 24px; background: radial-gradient(circle at 50% 42%, rgba(248,232,231,0.76), rgba(255,255,255,0.76) 63%, rgba(250,247,246,0.92)); }
 .industry-treemap-wrap .industry-chart-legend { margin: 0 0 8px; }
 .industry-treemap { height: 580px; display: flex; flex-direction: column; gap: 5px; }
-.treemap-row { min-height: 0; display: flex; gap: 5px; }
+.treemap-row { min-height: 0; flex-basis: 0; display: flex; gap: 5px; }
 .treemap-tile { position: relative; min-width: 0; min-height: 0; flex-basis: 0; overflow: visible; display: grid; align-content: center; justify-items: start; gap: 3px; padding: 8px; border: 0; border-radius: 13px; color: var(--ink); text-align: left; box-shadow: inset 0 0 0 1px rgba(148,64,60,0.1); transition: transform .2s ease, box-shadow .2s ease, filter .2s ease; }
 .treemap-tile:hover, .treemap-tile:focus-visible { z-index: 20; transform: scale(1.025); box-shadow: 0 14px 30px rgba(111,48,45,0.2), inset 0 0 0 2px rgba(148,64,60,0.26); filter: saturate(1.05); outline: none; }
 .treemap-tile > strong { display: block; max-width: 100%; color: var(--primary-900); font-size: 15px; font-weight: 950; line-height: 1.18; overflow-wrap: anywhere; word-break: keep-all; }

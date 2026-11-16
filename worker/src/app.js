@@ -589,7 +589,7 @@ export const APP_JS = String.raw`
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "회사별 칸 배치는 유지하고, 선택한 사업구분의 실제 실적만 표시합니다.", pill: formatIndustryPeriod(year, month) }),
+          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "행의 세로 길이와 회사 위치는 유지하며, 사각형 너비는 선택한 사업구분의 실제 실적에 따라 표시합니다.", pill: formatIndustryPeriod(year, month) }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
         h("section", { className: "industry-overview-grid" },
@@ -725,7 +725,7 @@ export const APP_JS = String.raw`
             type: "button",
             key: node.company,
             className: treemapTileClass(node, props.segment, group.total),
-            style: { flexGrow: Math.max(0.003, node.sizeActual || 0), background: industryTreemapBackground(node, props.segment) },
+            style: { flexGrow: Math.max(0.003, node.total.actual || 0), background: industryTreemapBackground(node, props.segment) },
             onMouseEnter: function () { setHovered(node); },
             onMouseLeave: function () { setHovered(null); },
             onFocus: function () { setHovered(node); },
