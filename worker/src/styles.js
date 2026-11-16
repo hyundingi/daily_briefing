@@ -193,7 +193,7 @@ button { border: 0; cursor: pointer; }
 .industry-chart-legend i.export, .stack-export { background: #c79653; }
 .industry-chart-legend i.other, .stack-other { background: #8c8582; }
 .industry-monthly-chart { position: relative; height: 275px; display: grid; grid-template-columns: repeat(12, minmax(22px, 1fr)); gap: 7px; align-items: end; padding-top: 18px; background: repeating-linear-gradient(to bottom, transparent 0 58px, rgba(117,111,111,0.1) 59px); border-bottom: 1px solid var(--line); }
-.industry-target-line { position: absolute; inset: 18px 0 24px; z-index: 3; overflow: visible; pointer-events: none; }
+.industry-target-line { position: absolute; top: 18px; right: 0; left: 0; width: 100%; height: calc(100% - 42px); z-index: 3; overflow: visible; pointer-events: none; }
 .industry-target-line polyline { fill: none; stroke: var(--primary-900); stroke-width: 2.2; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
 .industry-target-line circle { fill: #fff; stroke: var(--primary-900); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .industry-month-bar { position: relative; z-index: 2; min-width: 0; height: 100%; display: grid; grid-template-rows: 1fr 24px; gap: 6px; align-items: end; text-align: center; }

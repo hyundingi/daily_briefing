@@ -589,12 +589,12 @@ export const APP_JS = String.raw`
       )),
       company === "전체" ? h(React.Fragment, null,
         h("section", { className: "panel industry-treemap-panel" }, h("div", { className: "panel-inner" },
-          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "사각형 너비는 선택한 사업구분의 실제 실적입니다.", pill: formatIndustryPeriod(year, month) }),
+          h(PanelHead, { title: "회원사 실적 트리맵", subtitle: segment === "총계" ? "사각형 너비는 실제 실적, 아래 색 막대는 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "회사별 칸 배치는 유지하고, 선택한 사업구분의 실제 실적만 표시합니다.", pill: formatIndustryPeriod(year, month) }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
         h("section", { className: "industry-overview-grid" },
           h("div", { className: "panel" }, h("div", { className: "panel-inner" },
-            h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: segment }),
+            h(PanelHead, { title: "회원사별 실적 비교", subtitle: "실적순으로 정렬했습니다. 목표와 전년 동월 대비는 표에서 확인합니다.", pill: formatIndustryPeriod(year, month) + " · " + segment }),
             h(IndustryCompanyTable, { records: records, year: year, month: month, segment: segment })
           )),
           h("div", { className: "panel" }, h("div", { className: "panel-inner" },
@@ -702,9 +702,16 @@ export const APP_JS = String.raw`
       return String(row.report_year) === String(props.year) && String(row.report_month) === String(Number(props.month));
     }).map(function (row) { return row.company; })));
     var rows = companies.map(function (company) {
-      var records = industryRowsFor(props.records, props.year, props.month, company, props.segment);
-      return { company: company, total: aggregateIndustryRows(records), segments: industrySegments(records) };
-    }).sort(function (a, b) { return (b.total.actual || -Infinity) - (a.total.actual || -Infinity); });
+      var allRecords = industryRowsFor(props.records, props.year, props.month, company, "총계");
+      var selectedRecords = industryRowsFor(props.records, props.year, props.month, company, props.segment);
+      var allTotal = aggregateIndustryRows(allRecords);
+      return {
+        company: company,
+        total: aggregateIndustryRows(selectedRecords),
+        sizeActual: Number(allTotal.actual || 0),
+        segments: industrySegments(allRecords)
+      };
+    }).sort(function (a, b) { return b.sizeActual - a.sizeActual; });
     var hoverState = React.useState(null);
     var hovered = hoverState[0];
     var setHovered = hoverState[1];
@@ -718,7 +725,7 @@ export const APP_JS = String.raw`
             type: "button",
             key: node.company,
             className: treemapTileClass(node, props.segment, group.total),
-            style: { flexGrow: Math.max(0.003, node.total.actual || 0), background: industryTreemapBackground(node, props.segment) },
+            style: { flexGrow: Math.max(0.003, node.sizeActual || 0), background: industryTreemapBackground(node, props.segment) },
             onMouseEnter: function () { setHovered(node); },
             onMouseLeave: function () { setHovered(null); },
             onFocus: function () { setHovered(node); },
@@ -727,7 +734,7 @@ export const APP_JS = String.raw`
             "aria-label": node.company + " 실적 상세 보기"
           },
             h("strong", null, node.company),
-            h("span", null, formatIndustryNumber(node.total.actual)),
+            h("span", null, formatTreemapValue(node.total.actual)),
             props.segment === "총계" ? h("i", { className: "treemap-segments", style: { background: industryBubbleBackground(node, props.segment) } }) : null,
             hovered && hovered.company === node.company ? h(IndustryBubbleTooltip, { node: node, inline: true, placement: treemapTooltipPlacement(index, group.items.length) }) : null
           );
@@ -773,15 +780,15 @@ export const APP_JS = String.raw`
 
   function buildIndustryTreemap(rows, groupCount) {
     var groups = Array.from({ length: groupCount }, function () { return { total: 0, items: [] }; });
-    rows.slice().sort(function (a, b) { return (b.total.actual || 0) - (a.total.actual || 0); }).forEach(function (row) {
+    rows.slice().sort(function (a, b) { return (b.sizeActual || 0) - (a.sizeActual || 0); }).forEach(function (row) {
       var group = groups.slice().sort(function (a, b) {
         return (a.total - b.total) || (a.items.length - b.items.length);
       })[0];
       group.items.push(row);
-      group.total += Math.max(0, Number(row.total.actual || 0));
+      group.total += Math.max(0, Number(row.sizeActual || 0));
     });
     return groups.filter(function (group) { return group.items.length; }).map(function (group) {
-      group.items.sort(function (a, b) { return (b.total.actual || 0) - (a.total.actual || 0); });
+      group.items.sort(function (a, b) { return (b.sizeActual || 0) - (a.sizeActual || 0); });
       return group;
     });
   }
@@ -804,7 +811,7 @@ export const APP_JS = String.raw`
   }
 
   function treemapTileClass(node, segment, groupTotal) {
-    var share = Number(node.total.actual || 0) / Math.max(1, Number(groupTotal || 0));
+    var share = Number(node.sizeActual || 0) / Math.max(1, Number(groupTotal || 0));
     var density = share < 0.09 ? " tile-tiny" : share < 0.16 ? " tile-small" : "";
     var contrast = segment === "ETC" || segment === "OTC" ? " contrast-light" : "";
     return "treemap-tile" + (node.company === "동아ST" ? " donga" : "") + density + contrast;
@@ -890,6 +897,10 @@ export const APP_JS = String.raw`
   function formatIndustryNumber(value) {
     if (value === null || value === undefined || !isFinite(value)) return "-";
     return Number(value).toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+  }
+
+  function formatTreemapValue(value) {
+    return value === null || value === undefined || !isFinite(value) ? "0 · 값 없음" : formatIndustryNumber(value);
   }
 
   function formatIndustryPercent(actual, target) {
