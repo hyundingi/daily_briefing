@@ -584,7 +584,7 @@ export const APP_JS = String.raw`
           h(PanelHead, { title: "회원사 실적 비교 그래프", subtitle: segment === "총계" ? "막대 길이는 실제 실적, 막대 안의 색상은 ETC·OTC·수출·기타 구성입니다. 회사를 누르면 월별 상세 화면으로 이동합니다." : "막대 길이는 선택한 사업구분의 실제 실적입니다. 0값 회사는 목록 아래에 표시됩니다.", pill: formatIndustryPeriod(year, month), actions: segmentControl }),
           h(IndustryComparisonChart, { records: records, year: year, month: month, segment: segment, onSelectCompany: selectCompany })
         )),
-        h("div", { className: "panel" }, h("div", { className: "panel-inner" },
+        h("div", { className: "panel industry-cumulative-panel" }, h("div", { className: "panel-inner" },
           h(PanelHead, { title: "누적 실적", subtitle: "선택한 월까지의 누적 실적과 목표 달성률입니다.", pill: year + "년 1~" + Number(month) + "월 · " + segment }),
           h(IndustryCumulativeCompanyList, { records: records, year: year, throughMonth: month, segment: segment, onSelectCompany: selectCompany })
         ))
