@@ -241,7 +241,7 @@ button { border: 0; cursor: pointer; }
 .achievement-column.donga > i { background: linear-gradient(180deg, #5798d6, #2362a2); }
 .industry-month-bar small { color: var(--muted); font-size: 11px; font-weight: 800; }
 .industry-detail-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 18px; }
-.industry-overview-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); gap: 18px; align-items: start; }
+.industry-overview-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .45fr); gap: 18px; align-items: start; }
 .industry-overview-grid > .panel { min-width: 0; }
 .industry-cumulative-list { display: grid; gap: 6px; max-height: 940px; overflow: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(148,64,60,.38) transparent; }
 .industry-cumulative-row { display: grid; grid-template-columns: minmax(0, 1fr) 86px 54px; gap: 8px; align-items: center; min-height: 29px; padding: 7px 8px; border: 1px solid rgba(234,223,221,.82); border-radius: 11px; background: rgba(255,255,255,.7); color: var(--ink); text-align: left; transition: background .18s ease, transform .18s ease; }
