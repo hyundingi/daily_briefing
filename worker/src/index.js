@@ -1055,7 +1055,7 @@ async function importIndustryPerformance(request, env) {
   const normalized = inputRows.map(function (item) {
     const year = Number(item.report_year);
     const month = Number(item.report_month);
-    const company = clean(item.company);
+    const company = normalizeIndustryCompanyName(clean(item.company));
     const segment = clean(item.business_segment);
     if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12 || !company || !["ETC", "OTC", "수출", "기타"].includes(segment)) {
       throw Object.assign(new Error("기준연도·월·회원사·사업구분을 확인해주세요."), { status: 400 });
@@ -1106,6 +1106,10 @@ async function importIndustryPerformance(request, env) {
   await env.DB.prepare("INSERT INTO industry_performance_imports (id, source_filename, record_count, inserted_count, updated_count, skipped_count, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(importId, sourceFilename, normalized.length, inserted, updated, skipped, now).run();
   return jsonResponse({ ok: true, received: normalized.length, inserted, updated, skipped, imported_at: now });
+}
+
+function normalizeIndustryCompanyName(value) {
+  return clean(value).replace(/^\s*\(舊CJ헬스\)\s*/u, "").trim();
 }
 
 function nullableNumber(value) {

@@ -256,6 +256,7 @@ button { border: 0; cursor: pointer; }
 .industry-cumulative-row span { color: var(--ink); font-size: 12px; font-weight: 900; text-align: right; }
 .industry-cumulative-row em { color: var(--muted); font-size: 10px; font-style: normal; font-weight: 850; text-align: right; }
 .industry-cumulative-row.donga strong { color: #2f6fb3; }
+.industry-cumulative-row.donga { border-color: rgba(53,92,138,.28); background: linear-gradient(90deg, rgba(232,240,250,.76), rgba(255,255,255,.68)); }
 .industry-cumulative-row.combined { border-color: rgba(53,92,138,.35); background: linear-gradient(90deg, rgba(232,240,250,.92), rgba(255,255,255,.72)); }
 .industry-cumulative-row.combined strong { color: #24466d; }
 .industry-segment-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
@@ -276,6 +277,7 @@ button { border: 0; cursor: pointer; }
 .industry-company-bar:hover, .industry-company-bar:focus-visible { background: rgba(248,232,231,.76); transform: translateX(2px); outline: none; }
 .industry-company-bar > strong { overflow: hidden; color: var(--primary-900); font-size: 13px; font-weight: 900; white-space: nowrap; text-overflow: ellipsis; }
 .industry-company-bar.donga > strong { color: #2f6fb3; }
+.industry-company-bar.donga { background: rgba(232,240,250,.62); }
 .industry-company-bar.combined { background: rgba(232,240,250,.62); }
 .industry-company-bar.combined > strong { color: #24466d; }
 .industry-company-bar > span { color: var(--muted); font-size: 12px; font-weight: 850; text-align: right; }
