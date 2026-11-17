@@ -30,6 +30,9 @@ export const APP_JS = String.raw`
     var state = React.useState("dashboard");
     var active = state[0];
     var setActive = state[1];
+    var industryPageResetState = React.useState(0);
+    var industryPageReset = industryPageResetState[0];
+    var setIndustryPageReset = industryPageResetState[1];
     var dataState = React.useState(null);
     var data = dataState[0];
     var setData = dataState[1];
@@ -97,6 +100,11 @@ export const APP_JS = String.raw`
         .catch(function () { setArchives([]); });
     }
 
+    function selectNavigation(nextActive) {
+      if (nextActive === "industry-performance") setIndustryPageReset(function (value) { return value + 1; });
+      setActive(nextActive);
+    }
+
     function summarizeMissing() {
       var password = window.prompt("관리자 비밀번호를 입력해주세요.");
       if (!password) return;
@@ -147,7 +155,7 @@ export const APP_JS = String.raw`
     var filteredNews = prepareNewsItems(filterItems(news, newsCompany, newsQuery), { grouped: newsGroup, sort: newsSort });
 
     return h("div", { className: "app-shell" },
-      h(Sidebar, { active: active, setActive: setActive }),
+      h(Sidebar, { active: active, setActive: selectNavigation }),
       h("main", { className: "main" },
         h(Topbar, { data: data, setActive: setActive }),
         error ? h("div", { className: "empty" }, error) : null,
@@ -157,7 +165,7 @@ export const APP_JS = String.raw`
         !loading && active === "news" ? h(DataPage, { title: "뉴스", subtitle: "대표 기사 중심으로 유사 뉴스를 묶어 한눈에 확인합니다.", items: filteredNews, rawItems: news, type: "news", company: newsCompany, setCompany: setNewsCompany, query: newsQuery, setQuery: setNewsQuery, sort: newsSort, setSort: setNewsSort, grouped: newsGroup, setGrouped: setNewsGroup }) : null,
         !loading && active === "archive" ? h(ArchivePage, { archives: archives, selectedArchive: selectedArchive, setSelectedArchive: setSelectedArchive }) : null,
         !loading && active === "finance" ? h(FinancePage, { financials: financials, onRefresh: refreshFinancials }) : null,
-        !loading && active === "industry-performance" ? h(IndustryPerformancePage, { performance: industryPerformance }) : null,
+        !loading && active === "industry-performance" ? h(IndustryPerformancePage, { key: "industry-overview-" + industryPageReset, performance: industryPerformance }) : null,
         !loading && active === "profit" ? h(ProfitPanel, { report: managementReports.profit, editable: true, onUploaded: loadLatest }) : null,
         !loading && active === "cash" ? h(CashPanel, { report: managementReports.cash, editable: true, onUploaded: loadLatest }) : null,
         !loading && active === "schedule" ? h(SchedulePage, { calendarEvents: calendarEvents, calendarStatus: calendarStatus }) : null,
